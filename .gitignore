@@ -1,0 +1,25 @@
+# Local data and log files
+app_system.log
+*.log
+
+# Secrets, environment variables, and API keys
+.env
+.env.local
+.env.*
+workspace.json
+
+# Python virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python compiled bytecode cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Operating system clutter files
+.DS_Store
+Thumbs.db
