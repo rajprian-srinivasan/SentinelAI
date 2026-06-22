@@ -1,7 +1,7 @@
 import time
 import random
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 LOG_FILE = "app_system.log"
 
@@ -27,7 +27,7 @@ def generate_background_logs():
     print("Starting Bug Simulator. Generating traffic...")
     event_id = 1000
     while True:
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat()
         event_id += 1
         
         if random.random() > 0.20:
