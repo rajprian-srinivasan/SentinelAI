@@ -9,7 +9,7 @@ def monitor_logs():
 
     if not os.path.exists(LOG_FILE):
         print(f"Log file {LOG_FILE} is waiting to be intialized.")
-        while not os.pathl.exists(LOG_FILE):
+        while not os.path.exists(LOG_FILE):
             time.sleep(1)
     with open(LOG_FILE, "r") as file:
         file.seek(0,2)
