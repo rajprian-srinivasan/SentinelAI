@@ -10,18 +10,21 @@ def analyze_system_error(log_entry: dict) -> str:
 
     system_prompt = (
         "You are an automated Site Reliability Engineering (SRE) autonomous agent. "
-        "Your job is to analyze incoming critical system logs, diagnose the root cause, "
-        "and provide a concise recommendation for an automated fix."
+        "Your task is to review a critical system log and generate a raw Python script "
+        "that will programmatically fix the underlying bug in the application source code.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "1. Output ONLY executable Python code.\n"
+        "2. Do NOT wrap the code in markdown code blocks like ```python ... ```.\n"
+        "3. Do NOT include any introductory text, markdown, explanation, or commentary.\n"
+        "4. Your code should open the target file, locate the bug, modify the line safely, and save it back."
     )
     
     user_content = (
-        f"CRITICAL LOG INTERCEPTED:\n"
-        f"Event ID: {log_entry.get('event_id')}\n"
+        f"CRITICAL LOG FOR REPAIR:\n"
+        f"Target File: app.py\n"
         f"Event Name: {log_entry.get('event_name')}\n"
-        f"Severity: {log_entry.get('severity')}\n"
-        f"Message: {log_entry.get('message')}\n"
-        f"Timestamp: {log_entry.get('timestamp')}\n\n"
-        f"Please provide a 2-3 sentence analysis of the failure and state the immediate remediation step required."
+        f"Message: {log_entry.get('message')}\n\n"
+        f"Generate the raw Python script to fix the code in app.py to prevent this error from happening again."
     )
 
     try:
