@@ -1,7 +1,8 @@
 import os
 import time
 import json
-
+from datetime import datetime
+import ai_agent
 LOG_FILE = "app_system.log"
 
 def monitor_logs():
@@ -25,6 +26,10 @@ def monitor_logs():
                     print(f"   Message: {log_entry['message']}")
                     print(f"   Timestamp: {log_entry['timestamp']}")
                     print("-" * 50)
+                    
+                    print(f"Starting AI Agent to handle the critical event...")
+                    ai_agent_response = ai_agent.analyze_system_error(log_entry)
+                    print(f"AI Agent Response: {ai_agent_response}")
                 else:
                     print(f"[Heartbeat] Event {log_entry.get('event_id')} parsed successfully.", end="\r")
             except json.JSONDecodeError:
