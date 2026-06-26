@@ -6,14 +6,20 @@ import ai_agent
 LOG_FILE = "app_system.log"
 TARGET_FILE = "app.py"
 
-def execute_remediation(corrected_code: str):
+def execute_remediation(corrected_code: str, original_code_backup: str):
     print(f"\n[Executor] Overwriting '{TARGET_FILE}' directly with the AI fix...")
     try:
+        if not corrected_code or "AI Analysis failed" in corrected_code:
+            raise ValueError("Invalid code received from AI agent.")
+        compile(corrected_code, TARGET_FILE, "exec")
         with open(TARGET_FILE, "w") as src_file:
             src_file.write(corrected_code)
         print("[Executor] Self-healing complete! app.py has been modified directly on disk.")
+        
     except Exception as e:
-        print(f"[Executor ERROR] Failed to write fix to disk: {str(e)}")
+        print(f"[Executor ERROR] AI patch failed validation: {str(e)}. Restoring backup...")
+        with open(TARGET_FILE, "w") as src_file:
+            src_file.write(original_code_backup)
 
 def monitor_logs():
     print("Starting autonomous log monitoring...")
