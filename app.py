@@ -14,7 +14,7 @@ def simulate_traffic():
         timestamp = datetime.now(timezone.utc).isoformat()
         
         total_requests = 500
-        active_nodes = random.choice([5, 4, 2, 1, 0]) # Dynamic input that can hit 0!
+        active_nodes = random.choice([5, 4, 2, 1, 0]) 
         
         try:
             node_load = total_requests / active_nodes
