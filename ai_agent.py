@@ -23,6 +23,7 @@ def analyze_system_error(payload: dict) -> str:
         "   # INTERCEPTED ERROR: [State the raw error message]\n"
         "   # ROOT CAUSE ANALYSIS: [Explain why it happened in 1-2 clear sentences]\n"
         "   # REMEDIATION DEPLOYED: [Explain how your code fix resolves the issue]\n"
+        "   # LINE NUMBER: [Insert the line number of the error]\n"
         "2. Output ONLY the raw, executable Python code containing this header comment and the rest of the script.\n"
         "3. Do NOT wrap the file in markdown code blocks like ```python ... ```.\n"
         "4. Do NOT include conversational text outside of the Python code file."
