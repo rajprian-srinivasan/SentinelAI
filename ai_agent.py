@@ -5,26 +5,39 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI()
 
-def analyze_system_error(log_entry: dict) -> str:
+def analyze_system_error(payload: dict) -> str:
+    log_entry = payload.get("log", {})
+    current_source_code = payload.get("source_code", "")
+
     print(f"\n[AI Agent] Analyzing system failure: {log_entry.get('event_name')}...")
 
     system_prompt = (
-        "You are an automated Site Reliability Engineering (SRE) autonomous agent. "
-        "Your task is to review a critical system log and generate a raw Python script "
-        "that will programmatically fix the underlying bug in the application source code.\n\n"
+        "You are an automated Site Reliability Engineering (SRE) autonomous agent.\n"
+        "Your task is to review a critical system log alongside the application's current source code, "
+        "fix the bug, and output the entire, corrected source code file.\n\n"
         "CRITICAL INSTRUCTIONS:\n"
-        "1. Output ONLY executable Python code.\n"
-        "2. Do NOT wrap the code in markdown code blocks like ```python ... ```.\n"
-        "3. Do NOT include any introductory text, markdown, explanation, or commentary.\n"
-        "4. Your code should open the target file, locate the bug, modify the line safely, and save it back."
+        "1. At the absolute TOP of the file, you MUST include a Python comment block acting as an Incident Report. "
+        "It must explicitly state:\n"
+        "   # [AUTONOMOUS HEALING REPORT]\n"
+        "   # TIMESTAMP: [Insert event timestamp]\n"
+        "   # INTERCEPTED ERROR: [State the raw error message]\n"
+        "   # ROOT CAUSE ANALYSIS: [Explain why it happened in 1-2 clear sentences]\n"
+        "   # REMEDIATION DEPLOYED: [Explain how your code fix resolves the issue]\n"
+        "2. Output ONLY the raw, executable Python code containing this header comment and the rest of the script.\n"
+        "3. Do NOT wrap the file in markdown code blocks like ```python ... ```.\n"
+        "4. Do NOT include conversational text outside of the Python code file."
     )
     
     user_content = (
         f"CRITICAL LOG FOR REPAIR:\n"
-        f"Target File: app.py\n"
         f"Event Name: {log_entry.get('event_name')}\n"
-        f"Message: {log_entry.get('message')}\n\n"
-        f"Generate the raw Python script to fix the code in app.py to prevent this error from happening again."
+        f"Message: {log_entry.get('message')}\n"
+        f"Timestamp: {log_entry.get('timestamp')}\n\n"
+        f"CURRENT SOURCE CODE OF APP.PY:\n"
+        f"----------------------------------------\n"
+        f"{current_source_code}\n"
+        f"----------------------------------------\n\n"
+        f"Generate the full, updated source code for app.py with the explanation header and the code fix applied."
     )
 
     try:
@@ -39,16 +52,3 @@ def analyze_system_error(log_entry: dict) -> str:
         return response.choices[0].message.content
     except Exception as e:
         return f"AI Analysis failed due to an error: {str(e)}"
-
-if __name__ == "__main__":
-    mock_log = {
-        "event_id": 999,
-        "event_name": "MOCK_DISK_SPACE_EXHAUSTED",
-        "severity": "CRITICAL",
-        "message": "Partition /var/log is at 99% capacity. Write operations suspended.",
-        "timestamp": "2026-06-23T12:00:00Z"
-    }
-    print("Running quick standalone AI test...")
-    analysis = analyze_system_error(mock_log)
-    print("\n=== AI Analysis Result ===")
-    print(analysis)
