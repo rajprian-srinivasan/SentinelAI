@@ -11,7 +11,9 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
     try:
         if not corrected_code or "AI Analysis failed" in corrected_code:
             raise ValueError("Invalid code received from AI agent.")
+            
         compile(corrected_code, TARGET_FILE, "exec")
+        
         with open(TARGET_FILE, "w") as src_file:
             src_file.write(corrected_code)
         print("[Executor] Self-healing complete! app.py has been modified directly on disk.")
@@ -57,7 +59,8 @@ def monitor_logs():
                     }
                     
                     corrected_code = ai_agent.analyze_system_error(payload)
-                    execute_remediation(corrected_code)
+                    
+                    execute_remediation(corrected_code, source_code_context)
                     
                     print("\nMonitoring system resuming vigilance...")
                     print("-" * 50)
