@@ -7,6 +7,7 @@ import ai_agent
 
 LOG_FILE = "app_system.log"
 TARGET_FILE = "app.py"
+TEMP_FILE = "app.py.tmp"
 
 app_process = None
 
@@ -16,31 +17,49 @@ def start_application():
     app_process = subprocess.Popen(["python3", TARGET_FILE])
     print(f"[Orchestrator] {TARGET_FILE} running under PID: {app_process.pid}")
 
+def sanitize_ai_output(raw_code: str) -> str:
+    cleaned = raw_code.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    return cleaned
+
 def execute_remediation(corrected_code: str, original_code_backup: str):
     global app_process
-    print(f"\n[Executor] Overwriting '{TARGET_FILE}' directly with the AI fix...")
+    print(f"\n[Executor] Processing incoming patch...")
     try:
-        if not corrected_code or "AI Analysis failed" in corrected_code:
-            raise ValueError("Invalid code received from AI agent.")
+        clean_code = sanitize_ai_output(corrected_code)
+        
+        if not clean_code or "AI Analysis failed" in clean_code:
+            raise ValueError("Invalid or empty code received from AI agent.")
             
-        compile(corrected_code, TARGET_FILE, "exec")
+        compile(clean_code, TARGET_FILE, "exec")
         
         if app_process and app_process.poll() is None:
             print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
             app_process.terminate()
-            app_process.wait() 
+            app_process.wait()
         
-        with open(TARGET_FILE, "w") as src_file:
-            src_file.write(corrected_code)
-        print("[Executor] Self-healing complete! app.py has been modified on disk.")
+        with open(TEMP_FILE, "w") as tmp_file:
+            tmp_file.write(clean_code)
+            
+        os.replace(TEMP_FILE, TARGET_FILE)
+        print("[Executor] Self-healing complete! app.py has been atomically swapped on disk.")
         
         start_application()
         
     except Exception as e:
         print(f"[Executor ERROR] AI patch failed validation: {str(e)}. Restoring backup...")
+        if os.path.exists(TEMP_FILE):
+            os.remove(TEMP_FILE)
+            
         with open(TARGET_FILE, "w") as src_file:
             src_file.write(original_code_backup)
-        # Ensure the app stays running even if the patch failed
+            
         if app_process and app_process.poll() is not None:
             start_application()
 
@@ -97,4 +116,6 @@ if __name__ == "__main__":
         print("\n[Orchestrator] Stopping monitor and shutting down child processes...")
         if app_process and app_process.poll() is None:
             app_process.terminate()
+        if os.path.exists(TEMP_FILE):
+            os.remove(TEMP_FILE)
         print("System stopped cleanly.")
