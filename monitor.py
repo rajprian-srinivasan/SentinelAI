@@ -2,120 +2,91 @@ import os
 import time
 import json
 import subprocess
-import signal
+from datetime import datetime, timezone
 import ai_agent
 
-LOG_FILE = "app_system.log"
 TARGET_FILE = "app.py"
-TEMP_FILE = "app.py.tmp"
+LOG_FILE = "app_system.log"
 
-app_process = None
-
-def start_application():
-    global app_process
-    print(f"[Orchestrator] Launching fresh instance of {TARGET_FILE}...")
-    app_process = subprocess.Popen(["python3", TARGET_FILE])
-    print(f"[Orchestrator] {TARGET_FILE} running under PID: {app_process.pid}")
-
-def sanitize_ai_output(raw_code: str) -> str:
-    cleaned = raw_code.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
-    return cleaned
-
-def execute_remediation(corrected_code: str, original_code_backup: str):
-    global app_process
-    print(f"\n[Executor] Processing incoming patch...")
-    try:
-        clean_code = sanitize_ai_output(corrected_code)
-        
-        if not clean_code or "AI Analysis failed" in clean_code:
-            raise ValueError("Invalid or empty code received from AI agent.")
-            
-        compile(clean_code, TARGET_FILE, "exec")
-        
-        if app_process and app_process.poll() is None:
-            print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
-            app_process.terminate()
-            app_process.wait()
-        
-        with open(TEMP_FILE, "w") as tmp_file:
-            tmp_file.write(clean_code)
-            
-        os.replace(TEMP_FILE, TARGET_FILE)
-        print("[Executor] Self-healing complete! app.py has been atomically swapped on disk.")
-        
-        start_application()
-        
-    except Exception as e:
-        print(f"[Executor ERROR] AI patch failed validation: {str(e)}. Restoring backup...")
-        if os.path.exists(TEMP_FILE):
-            os.remove(TEMP_FILE)
-            
-        with open(TARGET_FILE, "w") as src_file:
-            src_file.write(original_code_backup)
-            
-        if app_process and app_process.poll() is not None:
-            start_application()
-
-def monitor_logs():
-    print("Starting autonomous log monitoring & orchestration...")
-
+def get_last_critical_log():
     if not os.path.exists(LOG_FILE):
-        print(f"Log file {LOG_FILE} is waiting to be initialized.")
-        start_application()
+        return None
         
-    with open(LOG_FILE, "r") as file:
-        file.seek(0, 2)
-        while True:
-            line = file.readline()
-            if not line:
-                time.sleep(0.1)
+    critical_logs = []
+    with open(LOG_FILE, "r") as f:
+        for line in f:
+            if not line.strip():
                 continue
             try:
-                log_entry = json.loads(line)
-                if log_entry.get("severity") == "CRITICAL":
-                    print("\n" + "="*50)
-                    print(f"[ALARM] Intercepted {log_entry['event_name']}!")
-                    print(f"   Timestamp: {log_entry.get('timestamp')}")
-                    print(f"   Message:   {log_entry.get('message')}")
-                    print(f"   Status:    SRE Agent is generating code patch now...")
-                    print("="*50)
-                    
-                    source_code_context = ""
-                    if os.path.exists(TARGET_FILE):
-                        with open(TARGET_FILE, "r") as src:
-                            source_code_context = src.read()
-                    
-                    payload = {
-                        "log": log_entry,
-                        "source_code": source_code_context
-                    }
-                    
-                    corrected_code = ai_agent.analyze_system_error(payload)
-                    execute_remediation(corrected_code, source_code_context)
-                    
-                    print("\nMonitoring system resuming vigilance...")
-                    print("-" * 50)
-                else:
-                    print(f"[Heartbeat] Event {log_entry.get('event_id')} parsed successfully.", end="\r")
+                log_data = json.loads(line)
+                if log_data.get("severity") == "CRITICAL":
+                    critical_logs.append(log_data)
             except json.JSONDecodeError:
-                print(f"Error parsing log entry: {line}")
+                continue
+                
+    return critical_logs[-1] if critical_logs else None
+
+def get_source_code():
+    with open(TARGET_FILE, "r") as f:
+        return f.read()
+
+def run_pipeline():
+    print("==================================================")
+    print("[MONITOR] Starting SRE Autonomous Orchestrator...")
+    print("==================================================")
+    
+    if os.path.exists(LOG_FILE):
+        os.remove(LOG_FILE)
+        
+    app_process = subprocess.Popen(["python3", TARGET_FILE])
+    print(f"[MONITOR] Subprocess spawned: {TARGET_FILE} (PID: {app_process.pid})")
+    
+    try:
+        while True:
+            time.sleep(1)
+            
+            if app_process.poll() is not None:
+                print("[MONITOR] Warning: Target app stopped unexpectedly. Restarting...")
+                app_process = subprocess.Popen(["python3", TARGET_FILE])
+                continue
+
+            last_crit = get_last_critical_log()
+            if last_crit:
+                print(f"\n[CRITICAL ALERT DETECTED]: {last_crit['message']}")
+                print(f"[MONITOR] Freezing target process (PID: {app_process.pid})...")
+                
+                app_process.terminate()
+                app_process.wait()
+                
+                source_code = get_source_code()
+                error_context = last_crit["message"]
+                
+                print("[MONITOR] Querying AI agent for remediation patch...")
+                fixed_code = ai_agent.generate_fix(source_code, error_context)
+                
+                if fixed_code:
+                    print("[MONITOR] Patch received. Implementing Atomic Swap...")
+                    
+                    temp_file = f"{TARGET_FILE}.tmp"
+                    with open(temp_file, "w") as f:
+                        f.write(fixed_code)
+                        
+                    os.replace(temp_file, TARGET_FILE)
+                    print("[MONITOR] Atomic file swap successful. Live code updated safely.")
+                    
+                    if os.path.exists(LOG_FILE):
+                        os.remove(LOG_FILE)
+                        
+                    print("[MONITOR] Rebooting microservice with deployed fix...")
+                    app_process = subprocess.Popen(["python3", TARGET_FILE])
+                else:
+                    print("[MONITOR] Error: AI agent failed to provide a valid code patch. Retrying...")
+                    app_process = subprocess.Popen(["python3", TARGET_FILE])
+                    
+    except KeyboardInterrupt:
+        print("\n[MONITOR] Shutting down orchestrator loop.")
+        if app_process.poll() is None:
+            app_process.terminate()
 
 if __name__ == "__main__":
-    try:
-        if os.path.exists(LOG_FILE):
-            start_application()
-        monitor_logs()
-    except KeyboardInterrupt:
-        print("\n[Orchestrator] Stopping monitor and shutting down child processes...")
-        if app_process and app_process.poll() is None:
-            app_process.terminate()
-        if os.path.exists(TEMP_FILE):
-            os.remove(TEMP_FILE)
-        print("System stopped cleanly.")
+    run_pipeline()
