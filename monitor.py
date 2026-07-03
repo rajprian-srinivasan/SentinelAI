@@ -2,21 +2,19 @@ import os
 import time
 import json
 import subprocess
-import signal
+import shutil
+from datetime import datetime
 import ai_agent
-from datetime import datetime, timezone
-
-LOG_FILE = "app_system.log"
-TARGET_FILE = "app.py"
-TEMP_FILE = "app.py.tmp"
+import config
 
 app_process = None
+LAST_HEAL_TIMES = {}
 
 def start_application():
     global app_process
-    print(f"[Orchestrator] Launching fresh instance of {TARGET_FILE}...")
-    app_process = subprocess.Popen(["python3", TARGET_FILE])
-    print(f"[Orchestrator] {TARGET_FILE} running under PID: {app_process.pid}")
+    print(f"[Orchestrator] Launching instance via command: {config.RUN_COMMAND}...")
+    app_process = subprocess.Popen(config.RUN_COMMAND)
+    print(f"[Orchestrator] Application running under PID: {app_process.pid}")
 
 def sanitize_ai_output(raw_code: str) -> str:
     cleaned = raw_code.strip()
@@ -28,6 +26,23 @@ def sanitize_ai_output(raw_code: str) -> str:
             lines = lines[:-1]
         cleaned = "\n".join(lines).strip()
     return cleaned
+
+def verify_code_behavior() -> bool:
+    try:
+        result = subprocess.run(
+            config.VALIDATE_COMMAND,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print("[Executor ERROR] Validation command timed out.")
+        return False
+    except Exception as e:
+        print(f"[Executor ERROR] Structural validation failed: {str(e)}")
+        return False
 
 def execute_remediation(corrected_code: str, original_code_backup: str):
     global app_process
@@ -42,7 +57,6 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
     
     try:
         clean_code = sanitize_ai_output(corrected_code)
-        
         if not clean_code or "AI Analysis failed" in clean_code:
             raise ValueError("Invalid or empty code received from AI agent.")
         
@@ -50,60 +64,62 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             if "INTERCEPTED ERROR:" in line:
                 audit_record["error_type"] = line.split(":", 1)[1].strip()
                 break
-                
-        compile(clean_code, TARGET_FILE, "exec")
+
+        with open(config.TEMP_FILE, "w") as tmp_file:
+            tmp_file.write(clean_code)
+
+        if not verify_code_behavior():
+            raise SyntaxError("AI patch failed language validation check.")
+            
         audit_record["compiled_successfully"] = True
         
         if app_process and app_process.poll() is None:
             print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
             app_process.terminate()
-            app_process.wait()
+            try:
+                app_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                print(f"[Executor] Process ignored SIGTERM. Escalating to SIGKILL...")
+                app_process.kill()
+                app_process.wait()
         
-        with open(TEMP_FILE, "w") as tmp_file:
-            tmp_file.write(clean_code)
-            
-        os.replace(TEMP_FILE, TARGET_FILE)
-        print("[Executor] Self-healing complete! app.py has been atomically swapped on disk.")
+        os.replace(config.TEMP_FILE, config.TARGET_FILE)
+        print(f"[Executor] Self-healing complete! {config.TARGET_FILE} atomically swapped.")
         
         audit_record["action_taken"] = "ATOMIC_SWAP_DEPLOYED"
         start_application()
         
     except Exception as e:
-        print(f"[Executor ERROR] AI patch failed validation: {str(e)}. Restoring backup...")
+        print(f"[Executor ERROR] AI patch validation failed: {str(e)}. Rolling back...")
         audit_record["compiled_successfully"] = False
         audit_record["action_taken"] = "ROLLBACK_TO_BACKUP"
         
-        if os.path.exists(TEMP_FILE):
-            os.remove(TEMP_FILE)
+        if os.path.exists(config.TEMP_FILE):
+            os.remove(config.TEMP_FILE)
             
-        with open(TARGET_FILE, "w") as src_file:
+        with open(config.TARGET_FILE, "w") as src_file:
             src_file.write(original_code_backup)
             
         if app_process and app_process.poll() is not None:
             start_application()
             
     finally:
-        audit_log_file = "remediation_audit.json"
         records = []
-        if os.path.exists(audit_log_file):
+        if os.path.exists(config.AUDIT_FILE):
             try:
-                with open(audit_log_file, "r") as rf:
+                with open(config.AUDIT_FILE, "r") as rf:
                     records = json.load(rf)
             except json.JSONDecodeError:
                 records = []
                 
         records.append(audit_record)
-        with open(audit_log_file, "w") as wf:
+        with open(config.AUDIT_FILE, "w") as wf:
             json.dump(records, wf, indent=4)
 
 def monitor_logs():
     print("Starting autonomous log monitoring & orchestration...")
-
-    if not os.path.exists(LOG_FILE):
-        print(f"Log file {LOG_FILE} is waiting to be initialized.")
-        start_application()
-        
-    with open(LOG_FILE, "r") as file:
+    
+    with open(config.LOG_FILE, "r") as file:
         file.seek(0, 2)
         while True:
             line = file.readline()
@@ -113,16 +129,23 @@ def monitor_logs():
             try:
                 log_entry = json.loads(line)
                 if log_entry.get("severity") == "CRITICAL":
+                    error_msg = log_entry.get("message", "")
+                    current_time = time.time()
+                    
+                    if error_msg in LAST_HEAL_TIMES and (current_time - LAST_HEAL_TIMES[error_msg] < config.COOLDOWN_WINDOW):
+                        print(f"\n[MONITOR] Rate-limiting active: Blocked duplicate AI payload call for error: '{error_msg}'")
+                        continue
+                        
+                    LAST_HEAL_TIMES[error_msg] = current_time
+                    
                     print("\n" + "="*50)
                     print(f"[ALARM] Intercepted {log_entry['event_name']}!")
-                    print(f"   Timestamp: {log_entry.get('timestamp')}")
-                    print(f"   Message:   {log_entry.get('message')}")
-                    print(f"   Status:    SRE Agent is generating code patch now...")
+                    print(f"   Message:   {error_msg}")
                     print("="*50)
                     
                     source_code_context = ""
-                    if os.path.exists(TARGET_FILE):
-                        with open(TARGET_FILE, "r") as src:
+                    if os.path.exists(config.TARGET_FILE):
+                        with open(config.TARGET_FILE, "r") as src:
                             source_code_context = src.read()
                     
                     payload = {
@@ -138,12 +161,18 @@ def monitor_logs():
                 else:
                     print(f"[Heartbeat] Event {log_entry.get('event_id')} parsed successfully.", end="\r")
             except json.JSONDecodeError:
-                print(f"Error parsing log entry: {line}")
+                pass
 
 if __name__ == "__main__":
     try:
-        if not os.path.exists(LOG_FILE):
-            with open(LOG_FILE, "w") as f:
+        primary_runtime_executable = config.RUN_COMMAND[0]
+        if not shutil.which(primary_runtime_executable):
+            print(f"[FATAL CRITICAL ERROR] The configured executable '{primary_runtime_executable}' was not found in the system PATH.")
+            print(f"Please check your environment installation or modify config.py to match your local setup.")
+            exit(1)
+            
+        if not os.path.exists(config.LOG_FILE):
+            with open(config.LOG_FILE, "w") as f:
                 pass
         
         if app_process is None:
@@ -151,9 +180,13 @@ if __name__ == "__main__":
             
         monitor_logs()
     except KeyboardInterrupt:
-        print("\n[Orchestrator] Stopping monitor and shutting down child processes...")
+        print("\n[Orchestrator] Shutting down child processes cleanly...")
         if app_process and app_process.poll() is None:
             app_process.terminate()
-        if os.path.exists(TEMP_FILE):
-            os.remove(TEMP_FILE)
+            try:
+                app_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                app_process.kill()
+        if os.path.exists(config.TEMP_FILE):
+            os.remove(config.TEMP_FILE)
         print("System stopped cleanly.")
