@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
-import config  
+import config
 
 load_dotenv()
 client = OpenAI()
@@ -10,11 +10,15 @@ def analyze_system_error(payload: dict) -> str:
     log_entry = payload.get("log", {})
     current_source_code = payload.get("source_code", "")
 
-    
-    _, ext = os.path.splitext(config.TARGET_FILE)
-    comment_char = "//" if ext in [".js", ".java", ".cpp", ".ts"] else "#"
-
     print(f"\n[AI Agent] Analyzing system failure: {log_entry.get('event_name')}...")
+
+    _, ext = os.path.splitext(config.TARGET_FILE)
+    if ext in [".js", ".java", ".cpp", ".c", ".cs", ".go"]:
+        comment_char = "//"
+    elif ext in [".rs"]:
+        comment_char = "///"
+    else:
+        comment_char = "#"
 
     system_prompt = (
         "You are an automated Site Reliability Engineering (SRE) autonomous agent.\n"
