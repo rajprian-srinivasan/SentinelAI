@@ -3,6 +3,7 @@ import time
 import json
 import subprocess
 import shutil
+import signal
 from datetime import datetime
 import ai_agent
 import config
@@ -13,8 +14,8 @@ LAST_HEAL_TIMES = {}
 def start_application():
     global app_process
     print(f"[Orchestrator] Launching instance via command: {config.RUN_COMMAND}...")
-    app_process = subprocess.Popen(config.RUN_COMMAND)
-    print(f"[Orchestrator] Application running under PID: {app_process.pid}")
+    app_process = subprocess.Popen(config.RUN_COMMAND, start_new_session=True)
+    print(f"[Orchestrator] Application running under PID: {app_process.pid} (New Process Group)")
 
 def sanitize_ai_output(raw_code: str) -> str:
     cleaned = raw_code.strip()
@@ -127,14 +128,16 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         print(f"[Executor] Staged historical backup to {backup_path}")
 
         if app_process and app_process.poll() is None:
-            print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
-            app_process.terminate()
+            print(f"[Executor] Terminating old process tree (PGID: {app_process.pid})...")
             try:
+                os.killpg(os.getpgid(app_process.pid), signal.SIGTERM)
                 app_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                print(f"[Executor] Process ignored SIGTERM. Escalating to SIGKILL...")
-                app_process.kill()
+                print(f"[Executor] Process tree ignored SIGTERM. Escalating to SIGKILL...")
+                os.killpg(os.getpgid(app_process.pid), signal.SIGKILL)
                 app_process.wait()
+            except ProcessLookupError:
+                pass
         
         os.replace(config.TEMP_FILE, config.TARGET_FILE)
         print(f"[Executor] Self-healing complete! {config.TARGET_FILE} atomically swapped.")
@@ -235,11 +238,14 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n[Orchestrator] Shutting down child processes cleanly...")
         if app_process and app_process.poll() is None:
-            app_process.terminate()
             try:
+                os.killpg(os.getpgid(app_process.pid), signal.SIGTERM)
                 app_process.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                app_process.kill()
+                os.killpg(os.getpgid(app_process.pid), signal.SIGKILL)
+                app_process.wait()
+            except ProcessLookupError:
+                pass
         if os.path.exists(config.TEMP_FILE):
             os.remove(config.TEMP_FILE)
         print("System stopped cleanly.")
