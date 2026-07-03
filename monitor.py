@@ -94,6 +94,16 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
     global app_process
     print(f"\n[Executor] Processing incoming patch...")
     
+    if config.DRY_RUN:
+        print("\n======================= [DRY RUN ACTIVE] =======================")
+        print("The AI Agent proposed the following remediation patch:")
+        print("----------------------------------------------------------------")
+        print(sanitize_ai_output(corrected_code))
+        print("----------------------------------------------------------------")
+        print("[Dry Run] Skipping code deployment, sandbox testing, and service restart.")
+        print("================================================================\n")
+        return
+
     audit_record = {
         "timestamp": datetime.now().isoformat(),
         "error_type": "Unknown",
