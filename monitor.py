@@ -4,6 +4,7 @@ import json
 import subprocess
 import signal
 import ai_agent
+from datetime import datetime, timezone
 
 LOG_FILE = "app_system.log"
 TARGET_FILE = "app.py"
@@ -141,7 +142,6 @@ def monitor_logs():
 
 if __name__ == "__main__":
     try:
-        # Keep the application launch sequential and safe from file missing drops
         if not os.path.exists(LOG_FILE):
             with open(LOG_FILE, "w") as f:
                 pass
