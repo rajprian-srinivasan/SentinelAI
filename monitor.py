@@ -29,19 +29,64 @@ def sanitize_ai_output(raw_code: str) -> str:
 
 def verify_code_behavior() -> bool:
     try:
-        result = subprocess.run(
+        print("[Sandbox] Step 1: Running language syntax validation...")
+        syntax_check = subprocess.run(
             config.VALIDATE_COMMAND,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             timeout=5
         )
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        print("[Executor ERROR] Validation command timed out.")
-        return False
+        if syntax_check.returncode != 0:
+            print(f"[Sandbox ERROR] Syntax check failed:\n{syntax_check.stderr}")
+            return False
+            
+        print("[Sandbox] Step 2: Running live 3-second application smoke test...")
+        
+        sandbox_command = list(config.RUN_COMMAND)
+        if config.TARGET_FILE in sandbox_command:
+            idx = sandbox_command.index(config.TARGET_FILE)
+            sandbox_command[idx] = config.TEMP_FILE
+            
+        initial_log_size = os.path.getsize(config.LOG_FILE) if os.path.exists(config.LOG_FILE) else 0
+        
+        sandbox_process = subprocess.Popen(
+            sandbox_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        try:
+            sandbox_process.wait(timeout=3)
+            print(f"[Sandbox ERROR] Application crashed instantly on boot with code {sandbox_process.returncode}")
+            return False
+        except subprocess.TimeoutExpired:
+            print("[Sandbox] Application survived initial boot sequence window.")
+            
+            if os.path.exists(config.LOG_FILE):
+                with open(config.LOG_FILE, "r") as f:
+                    f.seek(initial_log_size)
+                    for line in f:
+                        try:
+                            log_entry = json.loads(line)
+                            if log_entry.get("severity") == "CRITICAL":
+                                print(f"[Sandbox ERROR] App ran but threw a CRITICAL log: {log_entry.get('message')}")
+                                sandbox_process.kill()
+                                return False
+                        except json.JSONDecodeError:
+                            pass
+            
+            sandbox_process.terminate()
+            try:
+                sandbox_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                sandbox_process.kill()
+                
+            return True
+            
     except Exception as e:
-        print(f"[Executor ERROR] Structural validation failed: {str(e)}")
+        print(f"[Sandbox ERROR] Validation pipeline runtime exception: {str(e)}")
         return False
 
 def execute_remediation(corrected_code: str, original_code_backup: str):
@@ -69,7 +114,7 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             tmp_file.write(clean_code)
 
         if not verify_code_behavior():
-            raise SyntaxError("AI patch failed language validation check.")
+            raise SyntaxError("AI patch failed deep smoke test sandbox checks.")
             
         audit_record["compiled_successfully"] = True
         
