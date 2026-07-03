@@ -59,9 +59,13 @@ def verify_code_behavior() -> bool:
         )
         
         try:
-            sandbox_process.wait(timeout=3)
-            print(f"[Sandbox ERROR] Application crashed instantly on boot with code {sandbox_process.returncode}")
-            return False
+            return_code = sandbox_process.wait(timeout=3)
+            if return_code == 0:
+                print("[Sandbox] Application ran and exited cleanly with code 0.")
+                return True
+            else:
+                print(f"[Sandbox ERROR] Application crashed instantly on boot with code {return_code}")
+                return False
         except subprocess.TimeoutExpired:
             print("[Sandbox] Application survived initial boot sequence window.")
             
@@ -163,6 +167,9 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         for _ in range(100):
             time.sleep(0.1)
             if app_process.poll() is not None:
+                # If it exits with 0 during production observation, that's fine for our single-run app script
+                if app_process.returncode == 0:
+                    break
                 print(f"[Verification ERROR] Production application died during the post-fix window with exit code {app_process.returncode}")
                 post_fix_success = False
                 break
