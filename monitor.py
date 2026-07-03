@@ -118,6 +118,14 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             
         audit_record["compiled_successfully"] = True
         
+        os.makedirs("patches", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = os.path.basename(config.TARGET_FILE)
+        backup_path = f"patches/{timestamp}_pre_heal_{base_name}"
+        with open(backup_path, "w") as backup_file:
+            backup_file.write(original_code_backup)
+        print(f"[Executor] Staged historical backup to {backup_path}")
+
         if app_process and app_process.poll() is None:
             print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
             app_process.terminate()
