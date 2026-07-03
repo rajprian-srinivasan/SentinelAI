@@ -51,4 +51,3 @@ def simulate_traffic():
 
 if __name__ == "__main__":
     simulate_traffic()
-    

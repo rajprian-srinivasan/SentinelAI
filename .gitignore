@@ -1,5 +1,6 @@
 # Local data and log files
 app_system.log
+remediation_audit.json
 *.log
 
 # Secrets, environment variables, and API keys
