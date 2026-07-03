@@ -98,7 +98,8 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         "timestamp": datetime.now().isoformat(),
         "error_type": "Unknown",
         "compiled_successfully": False,
-        "action_taken": "None"
+        "action_taken": "None",
+        "post_fix_verified": "Pending"
     }
     
     try:
@@ -144,11 +145,45 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         
         audit_record["action_taken"] = "ATOMIC_SWAP_DEPLOYED"
         start_application()
+
+        print("[Verification] Observing live production runtime for 10 seconds...")
+        post_fix_success = True
+        verification_start_log_size = os.path.getsize(config.LOG_FILE) if os.path.exists(config.LOG_FILE) else 0
+        
+        for _ in range(100):
+            time.sleep(0.1)
+            if app_process.poll() is not None:
+                print(f"[Verification ERROR] Production application died during the post-fix window with exit code {app_process.returncode}")
+                post_fix_success = False
+                break
+                
+            if os.path.exists(config.LOG_FILE):
+                with open(config.LOG_FILE, "r") as f:
+                    f.seek(verification_start_log_size)
+                    for line in f:
+                        try:
+                            log_entry = json.loads(line)
+                            if log_entry.get("severity") == "CRITICAL":
+                                print(f"[Verification ERROR] New CRITICAL incident detected: {log_entry.get('message')}")
+                                post_fix_success = False
+                                break
+                        except json.JSONDecodeError:
+                            pass
+            if not post_fix_success:
+                break
+
+        if post_fix_success:
+            print("[Verification SUCCESS] No recurring CRITICAL logs detected. Patch verified stable.")
+            audit_record["post_fix_verified"] = "SUCCESS"
+        else:
+            print("[Verification FAILED] Patch did not resolve the underlying systemic failure. Triggering alert state...")
+            audit_record["post_fix_verified"] = "FAILED"
         
     except Exception as e:
         print(f"[Executor ERROR] AI patch validation failed: {str(e)}. Rolling back...")
         audit_record["compiled_successfully"] = False
         audit_record["action_taken"] = "ROLLBACK_TO_BACKUP"
+        audit_record["post_fix_verified"] = "SKIPPED_FAILED_VALIDATION"
         
         if os.path.exists(config.TEMP_FILE):
             os.remove(config.TEMP_FILE)
