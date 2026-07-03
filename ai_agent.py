@@ -10,7 +10,7 @@ def analyze_system_error(payload: dict) -> str:
     log_entry = payload.get("log", {})
     current_source_code = payload.get("source_code", "")
 
-    print(f"\n[AI Agent] Analyzing system failure: {log_entry.get('event_name')}...")
+    print(f"\n[AI Agent] Analyzing system failure using {config.OPENAI_MODEL}...")
 
     _, ext = os.path.splitext(config.TARGET_FILE)
     if ext in [".js", ".java", ".cpp", ".c", ".cs", ".go"]:
@@ -52,13 +52,17 @@ def analyze_system_error(payload: dict) -> str:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=config.OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
             temperature=0.0
         )
+        
+        usage = response.usage
+        print(f"[Cost Control] Tokens Used -> Prompt: {usage.prompt_tokens} | Completion: {usage.completion_tokens} | Total: {usage.total_tokens}")
+        
         return response.choices[0].message.content
     except Exception as e:
         return f"AI Analysis failed due to an error: {str(e)}"
