@@ -9,6 +9,9 @@ TARGET_FILE = "app.py"
 TEMP_FILE = f"{TARGET_FILE}.tmp"
 BASE_NAME, _ = os.path.splitext(TARGET_FILE)
 
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+DRY_RUN = False
+
 LANGUAGE_PROFILES = {
     ".py": {
         "run": ["python3", TARGET_FILE],
