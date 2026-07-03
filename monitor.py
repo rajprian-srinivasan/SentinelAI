@@ -31,13 +31,27 @@ def sanitize_ai_output(raw_code: str) -> str:
 def execute_remediation(corrected_code: str, original_code_backup: str):
     global app_process
     print(f"\n[Executor] Processing incoming patch...")
+    
+    audit_record = {
+        "timestamp": datetime.now().isoformat(),
+        "error_type": "Unknown",
+        "compiled_successfully": False,
+        "action_taken": "None"
+    }
+    
     try:
         clean_code = sanitize_ai_output(corrected_code)
         
         if not clean_code or "AI Analysis failed" in clean_code:
             raise ValueError("Invalid or empty code received from AI agent.")
-            
+        
+        for line in clean_code.splitlines():
+            if "INTERCEPTED ERROR:" in line:
+                audit_record["error_type"] = line.split(":", 1)[1].strip()
+                break
+                
         compile(clean_code, TARGET_FILE, "exec")
+        audit_record["compiled_successfully"] = True
         
         if app_process and app_process.poll() is None:
             print(f"[Executor] Terminating old process (PID: {app_process.pid})...")
@@ -50,10 +64,14 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         os.replace(TEMP_FILE, TARGET_FILE)
         print("[Executor] Self-healing complete! app.py has been atomically swapped on disk.")
         
+        audit_record["action_taken"] = "ATOMIC_SWAP_DEPLOYED"
         start_application()
         
     except Exception as e:
         print(f"[Executor ERROR] AI patch failed validation: {str(e)}. Restoring backup...")
+        audit_record["compiled_successfully"] = False
+        audit_record["action_taken"] = "ROLLBACK_TO_BACKUP"
+        
         if os.path.exists(TEMP_FILE):
             os.remove(TEMP_FILE)
             
@@ -62,6 +80,20 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             
         if app_process and app_process.poll() is not None:
             start_application()
+            
+    finally:
+        audit_log_file = "remediation_audit.json"
+        records = []
+        if os.path.exists(audit_log_file):
+            try:
+                with open(audit_log_file, "r") as rf:
+                    records = json.load(rf)
+            except json.JSONDecodeError:
+                records = []
+                
+        records.append(audit_record)
+        with open(audit_log_file, "w") as wf:
+            json.dump(records, wf, indent=4)
 
 def monitor_logs():
     print("Starting autonomous log monitoring & orchestration...")
