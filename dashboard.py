@@ -1,19 +1,18 @@
 import os
 import json
-
-AUDIT_FILE = "remediation_audit.json"
+import config
 
 def generate_report():
     print("==================================================")
     print("      SENTINEL AI SRE TELEMETRY DASHBOARD        ")
     print("==================================================")
     
-    if not os.path.exists(AUDIT_FILE):
-        print("\n[!] No telemetry data recorded yet. Run monitor.py to generate logs.")
+    if not os.path.exists(config.AUDIT_FILE):
+        print(f"\n[!] No telemetry data recorded yet. Run monitor.py to generate logs.")
         print("==================================================")
         return
 
-    with open(AUDIT_FILE, "r") as f:
+    with open(config.AUDIT_FILE, "r") as f:
         try:
             records = json.load(f)
         except json.JSONDecodeError:
