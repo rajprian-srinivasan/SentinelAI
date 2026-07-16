@@ -24,3 +24,4 @@ __pycache__/
 # Operating system clutter files
 .DS_Store
 Thumbs.db
+patches/
