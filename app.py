@@ -44,25 +44,26 @@ if __name__ == "__main__":
     print("      LAUNCHING SENTINELAI SIMULATION WORKLOAD    ")
     print("==================================================")
     
-    event_counter = random.randint(1000, 9999)
-    time.sleep(1)
-    
-    try:
+    while True:
+        event_counter = random.randint(1000, 9999)
+        print(f"\n[System] Commencing telemetry loop cycle: #{event_counter}")
+        time.sleep(2)
         
-        scenario = random.choice(["AUTH", "CLUSTER"])
-        
-        if scenario == "AUTH":
-            process_user_authentication()
-        elif scenario == "CLUSTER":
-            calculate_cluster_metrics()
-            
-    except Exception as e:
-        error_class = e.__class__.__name__
-        print(f"\n[CRITICAL FAILURE] App encountered a fatal exception: {error_class}")
-        emit_log(
-            event_id=event_counter,
-            event_name=error_class,
-            severity="CRITICAL",
-            message=f"Runtime Exception Intercepted: {str(e)}"
-        )
-        time.sleep(1)
+        try:
+            scenario = random.choice(["AUTH", "CLUSTER"])
+            if scenario == "AUTH":
+                process_user_authentication()
+            elif scenario == "CLUSTER":
+                calculate_cluster_metrics()
+                
+        except Exception as e:
+            error_class = e.__class__.__name__
+            print(f"[CRITICAL FAILURE] App encountered a fatal exception: {error_class}")
+            emit_log(
+                event_id=event_counter,
+                event_name=error_class,
+                severity="CRITICAL",
+                message=f"Runtime Exception Intercepted: {str(e)}"
+            )
+            print("[System] Cooldown period post-failure...")
+            time.sleep(4)
