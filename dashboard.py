@@ -18,7 +18,7 @@ HTML_TEMPLATE = """
         h1 { margin: 0; color: #38bdf8; font-size: 28px; }
         .status-badge { padding: 6px 16px; font-weight: bold; border-radius: 20px; text-transform: uppercase; font-size: 14px; }
         .status-active { background-color: #065f46; color: #34d399; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background-color: #1e293b; padding: 20px; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .card-title { font-size: 12px; text-transform: uppercase; color: #94a3b8; font-weight: 600; margin-bottom: 8px; }
         .card-value { font-size: 24px; font-weight: bold; color: #f8fafc; }
@@ -38,6 +38,7 @@ HTML_TEMPLATE = """
                 document.getElementById('success-rate').innerText = data.success_rate + '%';
                 document.getElementById('target-file').innerText = data.target;
                 document.getElementById('model-name').innerText = data.model;
+                document.getElementById('total-tokens').innerText = data.accumulated_tokens.toLocaleString();
                 
                 let tbody = document.getElementById('audit-rows');
                 tbody.innerHTML = '';
@@ -88,6 +89,10 @@ HTML_TEMPLATE = """
                 <div class="card-title">Recovery Success Rate</div>
                 <div class="card-value" id="success-rate">0%</div>
             </div>
+            <div class="card">
+                <div class="card-title">Allocated Token Footprint</div>
+                <div class="card-value" id="total-tokens">0</div>
+            </div>
         </div>
 
         <div class="section-title">Remediation Audit Log Trail</div>
@@ -119,10 +124,14 @@ def home():
 @app.route('/api/metrics')
 def api_metrics():
     history = []
+    accumulated_tokens = 0
     if os.path.exists(config.AUDIT_FILE):
         try:
             with open(config.AUDIT_FILE, "r") as f:
                 history = json.load(f)
+                for item in history:
+                    token_meta = item.get("tokens", {})
+                    accumulated_tokens += token_meta.get("total_tokens", 0)
         except json.JSONDecodeError:
             pass
             
@@ -142,7 +151,8 @@ def api_metrics():
         "target": config.TARGET_FILE,
         "model": config.OPENAI_MODEL,
         "history": history,
-        "recent_logs": recent_logs
+        "recent_logs": recent_logs,
+        "accumulated_tokens": accumulated_tokens
     })
 
 if __name__ == '__main__':
