@@ -48,20 +48,14 @@ def verify_code_behavior() -> bool:
         if config.TARGET_FILE in sandbox_command:
             idx = sandbox_command.index(config.TARGET_FILE)
             sandbox_command[idx] = config.TEMP_FILE
-        else:
-            if config.TARGET_FILE.endswith(".py"):
-                sandbox_command = ["python3", config.TEMP_FILE]
-
-        sandbox_log = f"{config.LOG_FILE}.sandbox"
-        if os.path.exists(sandbox_log):
-            os.remove(sandbox_log)
             
+        initial_log_size = os.path.getsize(config.LOG_FILE) if os.path.exists(config.LOG_FILE) else 0
+        
         sandbox_process = subprocess.Popen(
             sandbox_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True
+            text=True
         )
         
         try:
@@ -73,13 +67,26 @@ def verify_code_behavior() -> bool:
                 print(f"[Sandbox ERROR] Application crashed instantly on boot with code {return_code}")
                 return False
         except subprocess.TimeoutExpired:
-            print("[Sandbox] Application survived initial boot sequence window safely.")
+            print("[Sandbox] Application survived initial boot sequence window.")
             
+            if os.path.exists(config.LOG_FILE):
+                with open(config.LOG_FILE, "r") as f:
+                    f.seek(initial_log_size)
+                    for line in f:
+                        try:
+                            log_entry = json.loads(line)
+                            if log_entry.get("severity") == "CRITICAL":
+                                print(f"[Sandbox ERROR] App ran but threw a CRITICAL log: {log_entry.get('message')}")
+                                sandbox_process.kill()
+                                return False
+                        except json.JSONDecodeError:
+                            pass
+            
+            sandbox_process.terminate()
             try:
-                os.killpg(os.getpgid(sandbox_process.pid), signal.SIGKILL)
-                sandbox_process.wait()
-            except ProcessLookupError:
-                pass
+                sandbox_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                sandbox_process.kill()
                 
             return True
             
@@ -87,19 +94,10 @@ def verify_code_behavior() -> bool:
         print(f"[Sandbox ERROR] Validation pipeline runtime exception: {str(e)}")
         return False
 
-def execute_remediation(corrected_code: str, original_code_backup: str, tokens: dict):
+def execute_remediation(corrected_code: str, original_code_backup: str):
     global app_process
     print(f"\n[Executor] Processing incoming patch...")
     
-    audit_record = {
-        "timestamp": datetime.now().isoformat(),
-        "error_type": "Unknown",
-        "compiled_successfully": False,
-        "action_taken": "None",
-        "post_fix_verified": "Pending",
-        "tokens": tokens
-    }
-
     if config.DRY_RUN:
         print("\n======================= [DRY RUN ACTIVE] =======================")
         print("The AI Agent proposed the following remediation patch:")
@@ -108,21 +106,16 @@ def execute_remediation(corrected_code: str, original_code_backup: str, tokens: 
         print("----------------------------------------------------------------")
         print("[Dry Run] Skipping code deployment, sandbox testing, and service restart.")
         print("================================================================\n")
-        audit_record["action_taken"] = "DRY_RUN_LOGGED"
-        audit_record["post_fix_verified"] = "SKIPPED_DRY_RUN"
-        
-        records = []
-        if os.path.exists(config.AUDIT_FILE):
-            try:
-                with open(config.AUDIT_FILE, "r") as rf:
-                    records = json.load(rf)
-            except json.JSONDecodeError:
-                pass
-        records.append(audit_record)
-        with open(config.AUDIT_FILE, "w") as wf:
-            json.dump(records, wf, indent=4)
         return
 
+    audit_record = {
+        "timestamp": datetime.now().isoformat(),
+        "error_type": "Unknown",
+        "compiled_successfully": False,
+        "action_taken": "None",
+        "post_fix_verified": "Pending"
+    }
+    
     try:
         clean_code = sanitize_ai_output(corrected_code)
         if not clean_code or "AI Analysis failed" in clean_code:
@@ -174,6 +167,7 @@ def execute_remediation(corrected_code: str, original_code_backup: str, tokens: 
         for _ in range(100):
             time.sleep(0.1)
             if app_process.poll() is not None:
+                # If it exits with 0 during production observation, that's fine for our single-run app script
                 if app_process.returncode == 0:
                     break
                 print(f"[Verification ERROR] Production application died during the post-fix window with exit code {app_process.returncode}")
@@ -199,16 +193,14 @@ def execute_remediation(corrected_code: str, original_code_backup: str, tokens: 
             print("[Verification SUCCESS] No recurring CRITICAL logs detected. Patch verified stable.")
             audit_record["post_fix_verified"] = "SUCCESS"
         else:
-            print("[Verification FAILED] Patch did not resolve systemic failure. Executing Rollback...")
+            print("[Verification FAILED] Patch did not resolve the underlying systemic failure. Triggering alert state...")
             audit_record["post_fix_verified"] = "FAILED"
-            raise RuntimeError("Production post-fix verification step failed.")
         
     except Exception as e:
         print(f"[Executor ERROR] AI patch validation failed: {str(e)}. Rolling back...")
-        audit_record["compiled_successfully"] = audit_record.get("compiled_successfully", False)
+        audit_record["compiled_successfully"] = False
         audit_record["action_taken"] = "ROLLBACK_TO_BACKUP"
-        if audit_record["post_fix_verified"] == "Pending":
-            audit_record["post_fix_verified"] = "SKIPPED_FAILED_VALIDATION"
+        audit_record["post_fix_verified"] = "SKIPPED_FAILED_VALIDATION"
         
         if os.path.exists(config.TEMP_FILE):
             os.remove(config.TEMP_FILE)
@@ -217,12 +209,7 @@ def execute_remediation(corrected_code: str, original_code_backup: str, tokens: 
             src_file.write(original_code_backup)
             
         if app_process and app_process.poll() is not None:
-            try:
-                os.killpg(os.getpgid(app_process.pid), signal.SIGKILL)
-                app_process.wait()
-            except ProcessLookupError:
-                pass
-        start_application()
+            start_application()
             
     finally:
         records = []
@@ -274,8 +261,8 @@ def monitor_logs():
                         "source_code": source_code_context
                     }
                     
-                    corrected_code, tokens = ai_agent.analyze_system_error(payload)
-                    execute_remediation(corrected_code, source_code_context, tokens)
+                    corrected_code = ai_agent.analyze_system_error(payload)
+                    execute_remediation(corrected_code, source_code_context)
                     
                     print("\nMonitoring system resuming vigilance...")
                     print("-" * 50)

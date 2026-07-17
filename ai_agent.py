@@ -6,7 +6,7 @@ import config
 load_dotenv()
 client = OpenAI()
 
-def analyze_system_error(payload: dict) -> tuple:
+def analyze_system_error(payload: dict) -> str:
     log_entry = payload.get("log", {})
     current_source_code = payload.get("source_code", "")
 
@@ -63,14 +63,6 @@ def analyze_system_error(payload: dict) -> tuple:
         usage = response.usage
         print(f"[Cost Control] Tokens Used -> Prompt: {usage.prompt_tokens} | Completion: {usage.completion_tokens} | Total: {usage.total_tokens}")
         
-        corrected_code = response.choices[0].message.content
-        token_data = {
-            "prompt_tokens": usage.prompt_tokens,
-            "completion_tokens": usage.completion_tokens,
-            "total_tokens": usage.total_tokens
-        }
-        return corrected_code, token_data
+        return response.choices[0].message.content
     except Exception as e:
-        error_msg = f"# AI Analysis failed due to an error: {str(e)}"
-        fallback_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        return error_msg, fallback_tokens
+        return f"AI Analysis failed due to an error: {str(e)}"

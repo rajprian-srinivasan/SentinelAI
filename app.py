@@ -2,10 +2,8 @@ import time
 import json
 import random
 from datetime import datetime
-import config
 
-class ConnectionTimeoutError(Exception):
-    pass
+LOG_FILE = "app_system.log"
 
 def emit_log(event_id, event_name, severity, message):
     payload = {
@@ -15,7 +13,7 @@ def emit_log(event_id, event_name, severity, message):
         "message": message,
         "timestamp": datetime.now().isoformat()
     }
-    with open(config.LOG_FILE, "a") as f:
+    with open(LOG_FILE, "a") as f:
         f.write(json.dumps(payload) + "\n")
 
 def process_user_authentication():
@@ -46,28 +44,25 @@ if __name__ == "__main__":
     print("      LAUNCHING SENTINELAI SIMULATION WORKLOAD    ")
     print("==================================================")
     
-    while True:
-        event_counter = random.randint(1000, 9999)
-        print(f"\n[System] Commencing telemetry loop cycle: #{event_counter}")
-        time.sleep(2)
+    event_counter = random.randint(1000, 9999)
+    time.sleep(1)
+    
+    try:
         
-        try:
-            scenario = random.choice(["AUTH", "CLUSTER", "DATABASE"])
-            if scenario == "AUTH":
-                process_user_authentication()
-            elif scenario == "CLUSTER":
-                calculate_cluster_metrics()
-            elif scenario == "DATABASE":
-                fetch_remote_database_config()
-                
-        except Exception as e:
-            error_class = e.__class__.__name__
-            print(f"[CRITICAL FAILURE] App encountered a fatal exception: {error_class}")
-            emit_log(
-                event_id=event_counter,
-                event_name=error_class,
-                severity="CRITICAL",
-                message=f"Runtime Exception Intercepted: {str(e)}"
-            )
-            print("[System] Cooldown period post-failure...")
-            time.sleep(4)
+        scenario = random.choice(["AUTH", "CLUSTER"])
+        
+        if scenario == "AUTH":
+            process_user_authentication()
+        elif scenario == "CLUSTER":
+            calculate_cluster_metrics()
+            
+    except Exception as e:
+        error_class = e.__class__.__name__
+        print(f"\n[CRITICAL FAILURE] App encountered a fatal exception: {error_class}")
+        emit_log(
+            event_id=event_counter,
+            event_name=error_class,
+            severity="CRITICAL",
+            message=f"Runtime Exception Intercepted: {str(e)}"
+        )
+        time.sleep(1)
