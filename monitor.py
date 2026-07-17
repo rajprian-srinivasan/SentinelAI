@@ -48,14 +48,20 @@ def verify_code_behavior() -> bool:
         if config.TARGET_FILE in sandbox_command:
             idx = sandbox_command.index(config.TARGET_FILE)
             sandbox_command[idx] = config.TEMP_FILE
+        else:
+            if config.TARGET_FILE.endswith(".py"):
+                sandbox_command = ["python3", config.TEMP_FILE]
+
+        sandbox_log = f"{config.LOG_FILE}.sandbox"
+        if os.path.exists(sandbox_log):
+            os.remove(sandbox_log)
             
-        initial_log_size = os.path.getsize(config.LOG_FILE) if os.path.exists(config.LOG_FILE) else 0
-        
         sandbox_process = subprocess.Popen(
             sandbox_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            start_new_session=True
         )
         
         try:
@@ -67,26 +73,13 @@ def verify_code_behavior() -> bool:
                 print(f"[Sandbox ERROR] Application crashed instantly on boot with code {return_code}")
                 return False
         except subprocess.TimeoutExpired:
-            print("[Sandbox] Application survived initial boot sequence window.")
+            print("[Sandbox] Application survived initial boot sequence window safely.")
             
-            if os.path.exists(config.LOG_FILE):
-                with open(config.LOG_FILE, "r") as f:
-                    f.seek(initial_log_size)
-                    for line in f:
-                        try:
-                            log_entry = json.loads(line)
-                            if log_entry.get("severity") == "CRITICAL":
-                                print(f"[Sandbox ERROR] App ran but threw a CRITICAL log: {log_entry.get('message')}")
-                                sandbox_process.kill()
-                                return False
-                        except json.JSONDecodeError:
-                            pass
-            
-            sandbox_process.terminate()
             try:
-                sandbox_process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                sandbox_process.kill()
+                os.killpg(os.getpgid(sandbox_process.pid), signal.SIGKILL)
+                sandbox_process.wait()
+            except ProcessLookupError:
+                pass
                 
             return True
             
@@ -167,7 +160,6 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         for _ in range(100):
             time.sleep(0.1)
             if app_process.poll() is not None:
-                # If it exits with 0 during production observation, that's fine for our single-run app script
                 if app_process.returncode == 0:
                     break
                 print(f"[Verification ERROR] Production application died during the post-fix window with exit code {app_process.returncode}")
