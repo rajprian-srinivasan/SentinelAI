@@ -2,8 +2,10 @@ import time
 import json
 import random
 from datetime import datetime
+import config
 
-LOG_FILE = "app_system.log"
+class ConnectionTimeoutError(Exception):
+    pass
 
 def emit_log(event_id, event_name, severity, message):
     payload = {
@@ -13,7 +15,7 @@ def emit_log(event_id, event_name, severity, message):
         "message": message,
         "timestamp": datetime.now().isoformat()
     }
-    with open(LOG_FILE, "a") as f:
+    with open(config.LOG_FILE, "a") as f:
         f.write(json.dumps(payload) + "\n")
 
 def process_user_authentication():
@@ -50,11 +52,13 @@ if __name__ == "__main__":
         time.sleep(2)
         
         try:
-            scenario = random.choice(["AUTH", "CLUSTER"])
+            scenario = random.choice(["AUTH", "CLUSTER", "DATABASE"])
             if scenario == "AUTH":
                 process_user_authentication()
             elif scenario == "CLUSTER":
                 calculate_cluster_metrics()
+            elif scenario == "DATABASE":
+                fetch_remote_database_config()
                 
         except Exception as e:
             error_class = e.__class__.__name__
