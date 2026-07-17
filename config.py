@@ -10,7 +10,7 @@ TEMP_FILE = f"{TARGET_FILE}.tmp"
 BASE_NAME, _ = os.path.splitext(TARGET_FILE)
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-DRY_RUN = False
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 
 LANGUAGE_PROFILES = {
     ".py": {
