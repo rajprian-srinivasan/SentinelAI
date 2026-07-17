@@ -87,10 +87,19 @@ def verify_code_behavior() -> bool:
         print(f"[Sandbox ERROR] Validation pipeline runtime exception: {str(e)}")
         return False
 
-def execute_remediation(corrected_code: str, original_code_backup: str):
+def execute_remediation(corrected_code: str, original_code_backup: str, tokens: dict):
     global app_process
     print(f"\n[Executor] Processing incoming patch...")
     
+    audit_record = {
+        "timestamp": datetime.now().isoformat(),
+        "error_type": "Unknown",
+        "compiled_successfully": False,
+        "action_taken": "None",
+        "post_fix_verified": "Pending",
+        "tokens": tokens
+    }
+
     if config.DRY_RUN:
         print("\n======================= [DRY RUN ACTIVE] =======================")
         print("The AI Agent proposed the following remediation patch:")
@@ -99,16 +108,21 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
         print("----------------------------------------------------------------")
         print("[Dry Run] Skipping code deployment, sandbox testing, and service restart.")
         print("================================================================\n")
+        audit_record["action_taken"] = "DRY_RUN_LOGGED"
+        audit_record["post_fix_verified"] = "SKIPPED_DRY_RUN"
+        
+        records = []
+        if os.path.exists(config.AUDIT_FILE):
+            try:
+                with open(config.AUDIT_FILE, "r") as rf:
+                    records = json.load(rf)
+            except json.JSONDecodeError:
+                pass
+        records.append(audit_record)
+        with open(config.AUDIT_FILE, "w") as wf:
+            json.dump(records, wf, indent=4)
         return
 
-    audit_record = {
-        "timestamp": datetime.now().isoformat(),
-        "error_type": "Unknown",
-        "compiled_successfully": False,
-        "action_taken": "None",
-        "post_fix_verified": "Pending"
-    }
-    
     try:
         clean_code = sanitize_ai_output(corrected_code)
         if not clean_code or "AI Analysis failed" in clean_code:
@@ -185,14 +199,16 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             print("[Verification SUCCESS] No recurring CRITICAL logs detected. Patch verified stable.")
             audit_record["post_fix_verified"] = "SUCCESS"
         else:
-            print("[Verification FAILED] Patch did not resolve the underlying systemic failure. Triggering alert state...")
+            print("[Verification FAILED] Patch did not resolve systemic failure. Executing Rollback...")
             audit_record["post_fix_verified"] = "FAILED"
+            raise RuntimeError("Production post-fix verification step failed.")
         
     except Exception as e:
         print(f"[Executor ERROR] AI patch validation failed: {str(e)}. Rolling back...")
-        audit_record["compiled_successfully"] = False
+        audit_record["compiled_successfully"] = audit_record.get("compiled_successfully", False)
         audit_record["action_taken"] = "ROLLBACK_TO_BACKUP"
-        audit_record["post_fix_verified"] = "SKIPPED_FAILED_VALIDATION"
+        if audit_record["post_fix_verified"] == "Pending":
+            audit_record["post_fix_verified"] = "SKIPPED_FAILED_VALIDATION"
         
         if os.path.exists(config.TEMP_FILE):
             os.remove(config.TEMP_FILE)
@@ -201,7 +217,12 @@ def execute_remediation(corrected_code: str, original_code_backup: str):
             src_file.write(original_code_backup)
             
         if app_process and app_process.poll() is not None:
-            start_application()
+            try:
+                os.killpg(os.getpgid(app_process.pid), signal.SIGKILL)
+                app_process.wait()
+            except ProcessLookupError:
+                pass
+        start_application()
             
     finally:
         records = []
@@ -253,8 +274,8 @@ def monitor_logs():
                         "source_code": source_code_context
                     }
                     
-                    corrected_code = ai_agent.analyze_system_error(payload)
-                    execute_remediation(corrected_code, source_code_context)
+                    corrected_code, tokens = ai_agent.analyze_system_error(payload)
+                    execute_remediation(corrected_code, source_code_context, tokens)
                     
                     print("\nMonitoring system resuming vigilance...")
                     print("-" * 50)
