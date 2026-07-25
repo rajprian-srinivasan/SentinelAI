@@ -15,6 +15,7 @@ The engine functions as an automated control loop operating across four decouple
 
 ## Active Feature Roadmap
 
+* **[Completed] Side-by-Side Patch Visualizer**: Integrated Diff2Html and Python AST/unified diff parsing into the telemetry dashboard for real-time visual inspection of AI-generated code patches prior to deployment.
 * **[In Progress] Enterprise Multi-Language Support Matrix**: Expanding the automated healing loop beyond interpreted Python runtimes. Active development is underway to test and harden compilation and runtime smoke test profiles for compiled binaries and strict runtimes (`Node.js`, `Go`, `Java`, `C++`, `Rust`, and `C#`).
 * **[Planned] Diff-Based Patching**: Transitioning from full-file overwrites to precise Git-style line changes to lower token payload costs and increase AI remediation speeds.
 
