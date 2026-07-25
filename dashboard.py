@@ -1,39 +1,41 @@
-import os
-import json
 import glob
+import json
+import os
 import difflib
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, jsonify, render_template_string
 import config
 
 app = Flask(__name__)
 
+
 def get_latest_patch_diff():
-    """Reads the latest pre-heal backup file and compares it to current TARGET_FILE."""
-    if not os.path.exists("patches"):
-        return ""
+  """Reads the latest pre-heal backup file and compares it to current TARGET_FILE."""
+  if not os.path.exists('patches'):
+    return ''
 
-    patch_files = glob.glob("patches/*_pre_heal_*")
-    if not patch_files or not os.path.exists(config.TARGET_FILE):
-        return ""
+  patch_files = glob.glob('patches/*_pre_heal_*')
+  if not patch_files or not os.path.exists(config.TARGET_FILE):
+    return ''
 
-    
-    latest_backup = max(patch_files, key=os.path.getmtime)
+  latest_backup = max(patch_files, key=os.path.getmtime)
 
-    try:
-        with open(latest_backup, "r") as f:
-            before_lines = f.readlines()
-        with open(config.TARGET_FILE, "r") as f:
-            after_lines = f.readlines()
+  try:
+    with open(latest_backup, 'r') as f:
+      before_lines = f.readlines()
+    with open(config.TARGET_FILE, 'r') as f:
+      after_lines = f.readlines()
 
-        diff_gen = difflib.unified_diff(
-            before_lines,
-            after_lines,
-            fromfile=f"a/{os.path.basename(latest_backup)}",
-            tofile=f"b/{config.TARGET_FILE}",
-        )
-        return "".join(diff_gen)
-    except Exception as e:
-        return f"Error generating diff: {str(e)}"
+    # Using config.TARGET_FILE for both prevents the false "RENAMED" badge
+    diff_gen = difflib.unified_diff(
+        before_lines,
+        after_lines,
+        fromfile=f'a/{config.TARGET_FILE}',
+        tofile=f'b/{config.TARGET_FILE}',
+    )
+    return ''.join(diff_gen)
+  except Exception as e:
+    return f'Error generating diff: {str(e)}'
+
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -67,17 +69,49 @@ HTML_TEMPLATE = """
         .diff-container-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-bottom: 30px; overflow-x: auto; }
         .no-diff-msg { text-align: center; color: #64748b; padding: 30px; font-style: italic; }
 
-        /* Dark Mode Theme Overrides for Diff2Html */
-        .d2h-wrapper { background-color: #0f172a !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 6px; }
+        /* Comprehensive Dark Mode Theme Overrides for Diff2Html */
+        .d2h-wrapper { background-color: #0f172a !important; color: #e2e8f0 !important; border: none !important; }
+        .d2h-file-wrapper { border: 1px solid #334155 !important; margin-bottom: 0 !important; background-color: #0f172a !important; }
         .d2h-file-header { background-color: #1e293b !important; border-bottom: 1px solid #334155 !important; }
         .d2h-file-name { color: #38bdf8 !important; }
-        .d2h-code-line, .d2h-code-side-line { color: #e2e8f0 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
-        .d2h-code-line-ctn { color: #e2e8f0 !important; }
-        .d2h-del { background-color: #450a0a !important; color: #fca5a5 !important; }
-        .d2h-ins { background-color: #052e16 !important; color: #86efac !important; }
-        .d2h-code-side-emptyplaceholder { background-color: #0f172a !important; border-color: #334155 !important; }
-        .d2h-code-line-prefix { color: #64748b !important; }
-        .d2h-info { background-color: #1e293b !important; color: #94a3b8 !important; border-color: #334155 !important; }
+        .d2h-file-name-wrapper { color: #38bdf8 !important; }
+        .d2h-code-wrapper { background-color: #0f172a !important; }
+        .d2h-diff-table { background-color: #0f172a !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
+        .d2h-diff-tbody { background-color: #0f172a !important; }
+        .d2h-diff-tr { background-color: #0f172a !important; }
+        
+        /* Table Cell & Line Background Overrides */
+        .d2h-code-line, 
+        .d2h-code-side-line, 
+        .d2h-code-side-emptyplaceholder, 
+        .d2h-code-line-ctn, 
+        .d2h-cntx,
+        td.d2h-code-side-emptyplaceholder,
+        td.d2h-cntx,
+        td.d2h-info { 
+            background-color: #0f172a !important; 
+            color: #e2e8f0 !important; 
+            border-color: #1e293b !important;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; 
+        }
+
+        .d2h-cntx .d2h-code-line-ctn { color: #94a3b8 !important; }
+        
+        /* Deletions & Additions Colors */
+        .d2h-del, td.d2h-del { background-color: #450a0a !important; color: #fca5a5 !important; border-color: #7f1d1d !important; }
+        .d2h-ins, td.d2h-ins { background-color: #052e16 !important; color: #86efac !important; border-color: #14532d !important; }
+        
+        /* Line Numbers and Metadata Headers */
+        .d2h-code-line-prefix, 
+        .d2h-code-side-linenumber,
+        td.d2h-code-side-linenumber { 
+            color: #64748b !important; 
+            background-color: #0f172a !important; 
+            border-color: #1e293b !important; 
+        }
+        
+        .d2h-info { background-color: #1e293b !important; color: #38bdf8 !important; border-color: #334155 !important; }
+        .d2h-tag { background-color: #334155 !important; color: #e2e8f0 !important; border-color: #475569 !important; }
     </style>
     <script>
         let lastDiffString = "";
@@ -194,41 +228,48 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
 @app.route('/')
 def home():
-    return render_template_string(HTML_TEMPLATE, target=config.TARGET_FILE, model=config.OPENAI_MODEL)
+  return render_template_string(
+      HTML_TEMPLATE, target=config.TARGET_FILE, model=config.OPENAI_MODEL
+  )
+
 
 @app.route('/api/metrics')
 def api_metrics():
-    history = []
-    if os.path.exists(config.AUDIT_FILE):
-        try:
-            with open(config.AUDIT_FILE, "r") as f:
-                history = json.load(f)
-        except json.JSONDecodeError:
-            pass
-            
-    total = len(history)
-    successes = sum(1 for item in history if item.get("post_fix_verified") == "SUCCESS")
-    rate = round((successes / total) * 100) if total > 0 else 0
-    
-    recent_logs = []
-    if os.path.exists(config.LOG_FILE):
-        with open(config.LOG_FILE, "r") as f:
-            recent_logs = f.readlines()[-10:]
-            recent_logs = [line.strip() for line in recent_logs]
+  history = []
+  if os.path.exists(config.AUDIT_FILE):
+    try:
+      with open(config.AUDIT_FILE, 'r') as f:
+        history = json.load(f)
+    except json.JSONDecodeError:
+      pass
 
-    latest_diff = get_latest_patch_diff()
+  total = len(history)
+  successes = sum(
+      1 for item in history if item.get('post_fix_verified') == 'SUCCESS'
+  )
+  rate = round((successes / total) * 100) if total > 0 else 0
 
-    return jsonify({
-        "total_incidents": total,
-        "success_rate": rate,
-        "target": config.TARGET_FILE,
-        "model": config.OPENAI_MODEL,
-        "history": history,
-        "recent_logs": recent_logs,
-        "latest_diff": latest_diff
-    })
+  recent_logs = []
+  if os.path.exists(config.LOG_FILE):
+    with open(config.LOG_FILE, 'r') as f:
+      recent_logs = f.readlines()[-10:]
+      recent_logs = [line.strip() for line in recent_logs]
+
+  latest_diff = get_latest_patch_diff()
+
+  return jsonify({
+      'total_incidents': total,
+      'success_rate': rate,
+      'target': config.TARGET_FILE,
+      'model': config.OPENAI_MODEL,
+      'history': history,
+      'recent_logs': recent_logs,
+      'latest_diff': latest_diff,
+  })
+
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5001, debug=True)
+  app.run(host='127.0.0.1', port=5001, debug=True)
