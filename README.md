@@ -1,6 +1,8 @@
 # SentinelAI: Autonomous Self-Healing Site Reliability Engineering (SRE) Agent
 
-An autonomous, closed-loop SRE orchestration engine designed to monitor microservices, intercept catastrophic runtime exceptions, validate failure remediations in an isolated sandbox, and dynamically apply LLM-driven patches via transactional atomic code deployments.
+SentinelAI is an autonomous, closed-loop Site Reliability Engineering (SRE) orchestration engine designed to continuously monitor applications, detect catastrophic runtime failures, generate AI-powered code remediations, validate patches inside an isolated sandbox, and safely deploy verified fixes through transactional, atomic updates.
+
+---
 
 ## Architecture & System Dynamics
 
@@ -16,7 +18,9 @@ The engine functions as an automated control loop operating across four decouple
 ## Active Feature Roadmap
 
 * **[Completed] Side-by-Side Patch Visualizer**: Integrated Diff2Html and Python AST/unified diff parsing into the telemetry dashboard for real-time visual inspection of AI-generated code patches prior to deployment.
-* **[In Progress] Enterprise Multi-Language Support Matrix**: Expanding the automated healing loop beyond interpreted Python runtimes. Active development is underway to test and harden compilation and runtime smoke test profiles for compiled binaries and strict runtimes (`Node.js`, `Go`, `Java`, `C++`, `Rust`, and `C#`).
+* **[Completed] Production Cloud Target Blueprint (AWS Infrastructure)**: Successfully packaged the engine using Docker and Docker Compose, deploying the orchestrator and Flask dashboard onto an AWS EC2 instance with proper network binding and port routing.
+* **[In Progress] Dynamic User-Submitted Code Ingestion**: Building out frontend input forms and backend parsing routes to allow users to submit arbitrary, broken code snippets for live AI-driven analysis and patching.
+* **[Planned] Enterprise Multi-Language Support Matrix**: Expanding the automated healing loop beyond interpreted Python runtimes to compile profiles for `Node.js`, `Go`, `Java`, `C++`, `Rust`, and `C#`.
 * **[Planned] Diff-Based Patching**: Transitioning from full-file overwrites to precise Git-style line changes to lower token payload costs and increase AI remediation speeds.
 
 ---
@@ -24,6 +28,7 @@ The engine functions as an automated control loop operating across four decouple
 ## Deployment & Execution Lifecycle
 
 ### Phase 1: Local Architecture (Immediate Verification)
+
 To execute the runtime simulation loop locally on your machine:
 
 ```bash
@@ -36,13 +41,22 @@ export OPENAI_MODEL="gpt-4o-mini"
 
 # 3. Spin up the monitoring orchestrator and UI panel simultaneously
 python3 monitor.py & python3 dashboard.py
+
 ```
 
-### Phase 2 (In Progress): Production Cloud Target Blueprint (AWS Infrastructure)
+### Phase 2: Production Cloud Target Blueprint (AWS Infrastructure) [Completed]
 
-The architecture is decoupled to transition seamlessly into a cloud-native footprint:
+The architecture has been successfully decoupled and deployed to a cloud environment:
 
-- **Containerization**: Package `monitor.py`, `app.py`, and `dashboard.py` using multi-stage Dockerfiles to isolate language dependencies and environment profiles.
-- **Compute Instance (AWS EC2)**: Deploy the containerized engine onto an EC2 instance (`t3.micro`) using docker-compose to run the daemon monitoring loops in the background.
-- **Network Routing**: Expose port 5001 behind an AWS Security Group or an Application Load Balancer (ALB) to access the telemetry dashboard securely via a public IP.
-- **Production Log Ingestion**: Swap out the local flat-file log tailing engine for an AWS CloudWatch Logs or an ElasticSearch data ingestion agent to capture errors from live cloud microservices.
+* **Containerization**: Packaged `monitor.py`, `dashboard.py`, and the orchestrator logic using multi-stage Dockerfiles and `docker-compose`.
+* **Compute Instance (AWS EC2)**: Deployed the containerized engine onto an Ubuntu EC2 instance, running daemon monitoring loops in the background.
+* **Network Routing**: Bound services to `0.0.0.0:5001` behind AWS Security Groups, allowing secure access to the telemetry dashboard via public IP.
+* **Persistent Storage & State**: Codebases managed via GitHub version control with rapid spin-up and teardown cycles for cloud cost optimization.
+
+### Phase 3: Dynamic User Ingestion & Interactive Patching [In Progress]
+
+Extending the system beyond static workloads to support live user interactions:
+
+* **Frontend Input UI**: Interactive submission blocks within the dashboard where users can paste arbitrary code snippets or error logs.
+* **On-Demand Orchestrator Pipeline**: Adapting the backend execution engine to process user-submitted payloads dynamically instead of relying solely on hardcoded target files.
+* **Real-Time Diff Rendering**: Generating instant side-by-side patch diff comparisons specifically for user-provided code in real time.
