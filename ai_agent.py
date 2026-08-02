@@ -7,12 +7,23 @@ load_dotenv()
 client = OpenAI()
 
 def analyze_system_error(payload: dict) -> str:
-    log_entry = payload.get("log", {})
+    # Safely handle both structured logs and plain text string logs from the UI
+    raw_log = payload.get("log", {})
+    if isinstance(raw_log, dict):
+        event_name = raw_log.get("event_name", "Interactive Incident")
+        message = raw_log.get("message", "User Submitted Error Log")
+        timestamp = raw_log.get("timestamp", "N/A")
+    else:
+        event_name = "Interactive UI Submission"
+        message = str(raw_log)
+        timestamp = "N/A"
+
     current_source_code = payload.get("source_code", "")
 
     print(f"\n[AI Agent] Analyzing system failure using {config.OPENAI_MODEL}...")
 
-    _, ext = os.path.splitext(config.TARGET_FILE)
+    target_filename = config.TARGET_FILE if os.path.exists(config.TARGET_FILE) else "user_submission.py"
+    _, ext = os.path.splitext(target_filename)
     if ext in [".js", ".java", ".cpp", ".c", ".cs", ".go"]:
         comment_char = "//"
     elif ext in [".rs"]:
@@ -22,7 +33,7 @@ def analyze_system_error(payload: dict) -> str:
 
     system_prompt = (
         "You are an automated Site Reliability Engineering (SRE) autonomous agent.\n"
-        f"Your task is to review a critical system log alongside the application's current source code ({config.TARGET_FILE}), "
+        f"Your task is to review a critical system log alongside the application's current source code ({target_filename}), "
         "fix the bug, and output the entire, corrected source code file.\n\n"
         "CRITICAL INSTRUCTIONS:\n"
         f"1. At the absolute TOP of the file, you MUST include a comment block (using '{comment_char}' syntax) acting as an Incident Report. "
@@ -40,14 +51,14 @@ def analyze_system_error(payload: dict) -> str:
     
     user_content = (
         f"CRITICAL LOG FOR REPAIR:\n"
-        f"Event Name: {log_entry.get('event_name')}\n"
-        f"Message: {log_entry.get('message')}\n"
-        f"Timestamp: {log_entry.get('timestamp')}\n\n"
-        f"CURRENT SOURCE CODE OF {config.TARGET_FILE.upper()}:\n"
+        f"Event Name: {event_name}\n"
+        f"Message: {message}\n"
+        f"Timestamp: {timestamp}\n\n"
+        f"CURRENT SOURCE CODE OF {target_filename.upper()}:\n"
         f"----------------------------------------\n"
         f"{current_source_code}\n"
         f"----------------------------------------\n\n"
-        f"Generate the full, updated source code for {config.TARGET_FILE} with the explanation header and the code fix applied."
+        f"Generate the full, updated source code for {target_filename} with the explanation header and the code fix applied."
     )
 
     try:
@@ -63,6 +74,17 @@ def analyze_system_error(payload: dict) -> str:
         usage = response.usage
         print(f"[Cost Control] Tokens Used -> Prompt: {usage.prompt_tokens} | Completion: {usage.completion_tokens} | Total: {usage.total_tokens}")
         
-        return response.choices[0].message.content
+        patched_code = response.choices[0].message.content.strip()
+
+        # Extra safety check to strip markdown block ticks if LLM includes them
+        if patched_code.startswith("```"):
+            lines = patched_code.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            patched_code = "\n".join(lines).strip()
+
+        return patched_code
     except Exception as e:
         return f"AI Analysis failed due to an error: {str(e)}"
