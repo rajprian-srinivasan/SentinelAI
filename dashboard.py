@@ -60,16 +60,21 @@ HTML_TEMPLATE = """
         .card { background-color: #1e293b; padding: 20px; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .card-title { font-size: 12px; text-transform: uppercase; color: #94a3b8; font-weight: 600; margin-bottom: 8px; }
         .card-value { font-size: 24px; font-weight: bold; color: #f8fafc; }
-        .section-title { font-size: 20px; color: #38bdf8; margin-bottom: 15px; border-left: 4px solid #38bdf8; padding-left: 10px; margin-top: 30px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 15px; }
+        .section-title { font-size: 20px; color: #38bdf8; border-left: 4px solid #38bdf8; padding-left: 10px; margin: 0; }
         
         .interactive-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
         .form-group { margin-bottom: 15px; }
         .form-label { display: block; font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; }
         .code-textarea, .log-input { width: 100%; box-sizing: border-box; background-color: #090d16; border: 1px solid #334155; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; padding: 12px; border-radius: 6px; }
         .code-textarea { height: 160px; resize: vertical; }
+        
         .btn-submit { background-color: #0284c7; color: white; border: none; padding: 10px 20px; font-weight: bold; font-size: 14px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; }
         .btn-submit:hover { background-color: #0369a1; }
         .btn-submit:disabled { background-color: #475569; cursor: not-allowed; }
+        
+        .btn-secondary { background-color: #334155; color: #f8fafc; border: 1px solid #475569; padding: 6px 14px; font-weight: 600; font-size: 12px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; margin-left: 8px; }
+        .btn-secondary:hover { background-color: #475569; }
 
         table { width: 100%; border-collapse: collapse; background-color: #1e293b; border-radius: 8px; overflow: hidden; border: 1px solid #334155; margin-bottom: 30px; }
         th, td { padding: 14px 20px; text-align: left; border-bottom: 1px solid #334155; }
@@ -99,6 +104,7 @@ HTML_TEMPLATE = """
     </style>
     <script>
         let lastDiffString = "";
+        let currentPatchedCode = "";
 
         function renderDiff(diffString) {
             const targetElement = document.getElementById('diff-visualizer');
@@ -176,6 +182,12 @@ HTML_TEMPLATE = """
 
                 if (data.status === 'success' && data.diff) {
                     window.interactiveDiffActive = true;
+                    currentPatchedCode = data.patched_code;
+                    
+                    document.getElementById('clean-code-box').value = data.patched_code;
+                    document.getElementById('clean-code-container').style.display = 'block';
+                    document.getElementById('action-buttons').style.display = 'block';
+
                     renderDiff(data.diff);
                 } else {
                     alert("Patching Error: " + (data.message || "Unable to generate patch."));
@@ -185,6 +197,24 @@ HTML_TEMPLATE = """
                 btn.disabled = false;
                 btn.innerText = "Analyze & Remediate Patch";
                 console.error("Remediation request failed:", err);
+            });
+        }
+
+        function copyCleanCode() {
+            if (!currentPatchedCode) return;
+            navigator.clipboard.writeText(currentPatchedCode).then(() => {
+                const btn = document.getElementById('btn-copy-code');
+                btn.innerText = "Copied!";
+                setTimeout(() => { btn.innerText = "Copy Clean Code"; }, 2000);
+            });
+        }
+        
+        function copyDiffString() {
+            if (!lastDiffString && !window.interactiveDiffActive) return;
+            navigator.clipboard.writeText(lastDiffString).then(() => {
+                const btn = document.getElementById('btn-copy-diff');
+                btn.innerText = "Copied!";
+                setTimeout(() => { btn.innerText = "Copy Diff"; }, 2000);
             });
         }
 
@@ -223,7 +253,9 @@ HTML_TEMPLATE = """
             </div>
         </div>
 
-        <div class="section-title">Interactive Remediation Workbench (Dynamic Ingestion)</div>
+        <div class="section-header">
+            <h2 class="section-title">Interactive Remediation Workbench (Dynamic Ingestion)</h2>
+        </div>
         <div class="interactive-box">
             <div class="form-group">
                 <label class="form-label" for="user-code">Broken Code Snippet</label>
@@ -236,14 +268,28 @@ HTML_TEMPLATE = """
             <button id="btn-remediate" class="btn-submit" onclick="submitInteractiveRemediation()">Analyze & Remediate Patch</button>
         </div>
 
-        <div class="section-title">Latest AI Patch Diff (Side-by-Side Visualizer)</div>
+        <div class="section-header">
+            <h2 class="section-title">Latest AI Patch Diff (Side-by-Side Visualizer)</h2>
+            <div id="action-buttons" style="display: none;">
+                <button id="btn-copy-code" class="btn-secondary" onclick="copyCleanCode()">Copy Clean Code</button>
+            </div>
+        </div>
         <div class="diff-container-box">
             <div id="diff-visualizer">
                 <div class="no-diff-msg">Awaiting autonomous patch deployment...</div>
             </div>
         </div>
 
-        <div class="section-title">Remediation Audit Log Trail</div>
+        <div id="clean-code-container" style="display: none; margin-bottom: 30px;">
+            <div class="section-header">
+                <h2 class="section-title">Clean Remediated Source Code (Ready to Paste)</h2>
+            </div>
+            <textarea id="clean-code-box" class="code-textarea" style="height: 250px;" readonly></textarea>
+        </div>
+
+        <div class="section-header">
+            <h2 class="section-title">Remediation Audit Log Trail</h2>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -258,7 +304,9 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
 
-        <div class="section-title">Live System Output Tail</div>
+        <div class="section-header">
+            <h2 class="section-title">Live System Output Tail</h2>
+        </div>
         <div class="log-box" id="log-lines">Awaiting telemetry streams...</div>
     </div>
 </body>
