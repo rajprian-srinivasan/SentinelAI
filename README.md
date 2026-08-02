@@ -1,6 +1,22 @@
+Here is the updated `README.md` with the `localhost` reference removed and replaced with generic local URL instructions:
+
+---
+
+```markdown
 # SentinelAI: Autonomous Self-Healing Site Reliability Engineering (SRE) Agent
 
 SentinelAI is an autonomous, closed-loop Site Reliability Engineering (SRE) orchestration engine designed to continuously monitor applications, detect catastrophic runtime failures, generate AI-powered code remediations, validate patches inside an isolated sandbox, and safely deploy verified fixes through transactional, atomic updates.
+
+---
+
+## Key Features
+
+* **Enterprise Polyglot Support (12 Runtimes)**: Native language profiles supporting Python (`.py`), Node.js/JavaScript (`.js`), TypeScript (`.ts`), Go (`.go`), Java (`.java`), C++ (`.cpp`), C (`.c`), Rust (`.rs`), C# (`.cs`), Shell/Bash (`.sh`), Ruby (`.rb`), and PHP (`.php`).
+* **Language-Native Incident Header Injector**: Generates top-of-file SRE incident reports dynamically using the appropriate language comment syntax (`#`, `//`, `///`) without breaking executable code.
+* **Interactive Remediation Workbench**: Web-based ingestion platform where engineers can submit broken code snippets and stack traces in any supported language for instant AI analysis and remediation.
+* **Side-by-Side Visual Diffing**: Integrated `Diff2Html` visualizer displaying side-by-side patch diffs and clean, executable source code ready for production deployment.
+* **Cost Observability & Telemetry**: Real-time token usage tracking (Prompt, Completion, and Total) to maintain API cost control during autonomous healing cycles.
+* **Compiler & Syntax Validation Loop (In Progress)**: Automated pre-flight checks using native compiler flags (`g++ -fsyntax-only`, `python3 -m py_compile`, `go vet`, `rustc`, etc.) before deploying patches.
 
 ---
 
@@ -9,27 +25,38 @@ SentinelAI is an autonomous, closed-loop Site Reliability Engineering (SRE) orch
 The engine functions as an automated control loop operating across four decoupled components:
 
 1. **Observation & Telemetry (`monitor.py`)**: Continuously tails production logs using system process groups (`subprocess.Popen`) and processes system telemetry streams using structured JSON schemas.
-2. **Automated AI Remediation (`ai_agent.py`)**: Maps syntax specifications dynamically using multi-language execution profiles (`.py`, `.js`, `.go`, `.cpp`). Upon failure interception, it extracts the target codebase context to compute an isolated root-cause code patch.
-3. **Isolated Sandbox Verification**: Staged changes are written to a localized transaction target (`app.py.tmp`) and passed through an isolated syntax compilation check followed by a 3-second application runtime smoke test to protect production environments from regression breaches.
-4. **Operations Control Center (`dashboard.py`)**: A persistent web management panel built with Flask to expose real-time metrics tracking incident history, recovery success rates, token cost allocations, and telemetry stream tail windows.
+2. **Centralized Configuration & Language Matrix (`config.py`)**: Single source of truth defining runtime profiles, execution commands, compilation validation flags, and comment syntaxes across 12 programming languages.
+3. **Automated AI Remediation (`ai_agent.py`)**: Queries language-specific profiles to extract target codebase context, inspect error logs, and generate isolated root-cause code patches with language-native report headers.
+4. **Operations Control Center (`dashboard.py`)**: A persistent web management panel built with Flask to expose real-time metrics, incident history, recovery success rates, token cost allocations, and an interactive multi-language remediation workbench.
 
 ---
 
-## Active Feature Roadmap
+## Dynamic Multi-Language Matrix
 
-* **[Completed] Side-by-Side Patch Visualizer**: Integrated Diff2Html and Python AST/unified diff parsing into the telemetry dashboard for real-time visual inspection of AI-generated code patches prior to deployment.
-* **[Completed] Production Cloud Target Blueprint (AWS Infrastructure)**: Successfully packaged the engine using Docker and Docker Compose, deploying the orchestrator and Flask dashboard onto an AWS EC2 instance with proper network binding and port routing.
-* **[In Progress] Dynamic User-Submitted Code Ingestion**: Building out frontend input forms and backend parsing routes to allow users to submit arbitrary, broken code snippets for live AI-driven analysis and patching.
-* **[Planned] Enterprise Multi-Language Support Matrix**: Expanding the automated healing loop beyond interpreted Python runtimes to compile profiles for `Node.js`, `Go`, `Java`, `C++`, `Rust`, and `C#`.
-* **[Planned] Diff-Based Patching**: Transitioning from full-file overwrites to precise Git-style line changes to lower token payload costs and increase AI remediation speeds.
+SentinelAI automatically matches target runtimes with their native comment syntax and compiler validation pipelines:
+
+| Language Profile | File Extension | Comment Syntax | Pre-Flight Validation Command |
+| :--- | :--- | :--- | :--- |
+| **Python** | `.py` | `#` | `python3 -m py_compile` |
+| **Node.js / JS** | `.js` | `//` | `node --check` |
+| **TypeScript** | `.ts` | `//` | `npx tsc --noEmit` |
+| **Go** | `.go` | `//` | `go vet` |
+| **Java** | `.java` | `//` | `javac` |
+| **C++** | `.cpp` | `//` | `g++ -fsyntax-only` |
+| **C** | `.c` | `//` | `gcc -fsyntax-only` |
+| **Rust** | `.rs` | `///` | `rustc --gated-syntax-check` |
+| **C#** | `.cs` | `//` | `dotnet build --no-incremental` |
+| **Shell / Bash** | `.sh` | `#` | `bash -n` |
+| **Ruby** | `.rb` | `#` | `ruby -c` |
+| **PHP** | `.php` | `//` | `php -l` |
 
 ---
 
 ## Deployment & Execution Lifecycle
 
-### Phase 1: Local Architecture (Immediate Verification)
+### Local Architecture Execution
 
-To execute the runtime simulation loop locally on your machine:
+To execute the self-healing dashboard and orchestrator:
 
 ```bash
 # 1. Install operational dependencies
@@ -38,25 +65,26 @@ pip install openai flask python-dotenv
 # 2. Export environment variables
 export OPENAI_API_KEY="your-api-key-here"
 export OPENAI_MODEL="gpt-4o-mini"
+export TARGET_FILE="app.py"  # Optional override
 
-# 3. Spin up the monitoring orchestrator and UI panel simultaneously
-python3 monitor.py & python3 dashboard.py
+# 3. Spin up the Dashboard Panel
+python3 dashboard.py
 
 ```
 
-### Phase 2: Production Cloud Target Blueprint (AWS Infrastructure) [Completed]
+Access the Operations Control Center on port `5001` in your browser.
 
-The architecture has been successfully decoupled and deployed to a cloud environment:
+---
 
-* **Containerization**: Packaged `monitor.py`, `dashboard.py`, and the orchestrator logic using multi-stage Dockerfiles and `docker-compose`.
-* **Compute Instance (AWS EC2)**: Deployed the containerized engine onto an Ubuntu EC2 instance, running daemon monitoring loops in the background.
-* **Network Routing**: Bound services to `0.0.0.0:5001` behind AWS Security Groups, allowing secure access to the telemetry dashboard via public IP.
-* **Persistent Storage & State**: Codebases managed via GitHub version control with rapid spin-up and teardown cycles for cloud cost optimization.
+## Active Feature Roadmap
 
-### Phase 3: Dynamic User Ingestion & Interactive Patching [In Progress]
+* **[Completed] Dynamic Multi-Language Ingestion Matrix**: Expanded target runtime matrix to support 12 enterprise languages with dynamic HTML selection driven directly from `config.py`.
+* **[Completed] Language-Native Header Generator**: Automated dynamic comment syntax matching (`#`, `//`, `///`) for top-of-file autonomous incident reports across all language profiles.
+* **[Completed] Side-by-Side Patch Visualizer**: Integrated Diff2Html and Python unified diff parsing into the telemetry dashboard for real-time visual inspection of code patches.
+* **[Completed] Production Cloud Target Blueprint (AWS Infrastructure)**: Packaged the engine using Docker and Docker Compose, deploying the orchestrator and Flask dashboard onto an AWS EC2 instance.
+* **[In Progress] Pre-Flight Compilation Verification Loop**: Hooking `config.LANGUAGE_PROFILES` validation commands (`gcc`, `javac`, `go vet`, `tsc`, `rustc`) into an isolated pre-flight execution sandbox to verify patches before outputting to the user.
+* **[Planned] Diff-Based Patching**: Transitioning from full-file overwrites to precise Git-style line changes to lower token payload costs and increase remediation speed.
 
-Extending the system beyond static workloads to support live user interactions:
+```
 
-* **Frontend Input UI**: Interactive submission blocks within the dashboard where users can paste arbitrary code snippets or error logs.
-* **On-Demand Orchestrator Pipeline**: Adapting the backend execution engine to process user-submitted payloads dynamically instead of relying solely on hardcoded target files.
-* **Real-Time Diff Rendering**: Generating instant side-by-side patch diff comparisons specifically for user-provided code in real time.
+```
