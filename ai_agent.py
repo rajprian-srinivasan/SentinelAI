@@ -8,14 +8,17 @@ client = OpenAI()
 
 
 def get_comment_syntax(language_or_file: str) -> str:
-    val = str(language_or_file).lower()
-    
-    if val in ['rust', 'rs', '.rs']:
-        return '///'
-    elif val in ['nodejs', 'javascript', 'go', 'java', 'cpp', 'csharp', 'js', 'go', 'java', 'cpp', 'cs', '.js', '.go', '.java', '.cpp', '.cs']:
-        return '//'
-    else:
-        return '#'
+    val = str(language_or_file).lower().strip()
+    ext = val if val.startswith(".") else f".{val}"
+
+    if ext in config.LANGUAGE_PROFILES:
+        return config.LANGUAGE_PROFILES[ext]["comment"]
+
+    for profile_ext, profile in config.LANGUAGE_PROFILES.items():
+        if val == profile["name"].lower() or val in profile_ext:
+            return profile["comment"]
+
+    return "#"
 
 
 def analyze_system_error(error_payload) -> str:
