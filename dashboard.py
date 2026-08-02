@@ -66,8 +66,8 @@ HTML_TEMPLATE = """
         .interactive-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
         .form-group { margin-bottom: 15px; }
         .form-label { display: block; font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; }
-        .code-textarea, .log-input { width: 100%; box-sizing: border-box; background-color: #090d16; border: 1px solid #334155; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; padding: 12px; border-radius: 6px; }
-        .code-textarea { height: 160px; resize: vertical; }
+        .code-textarea, .log-input, .lang-select { width: 100%; box-sizing: border-box; background-color: #090d16; border: 1px solid #334155; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; padding: 12px; border-radius: 6px; }
+        .code-textarea { height: 180px; resize: vertical; }
         
         .btn-submit { background-color: #0284c7; color: white; border: none; padding: 10px 20px; font-weight: bold; font-size: 14px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; }
         .btn-submit:hover { background-color: #0369a1; }
@@ -161,9 +161,10 @@ HTML_TEMPLATE = """
             const btn = document.getElementById('btn-remediate');
             const codePayload = document.getElementById('user-code').value;
             const logPayload = document.getElementById('user-log').value;
+            const languagePayload = document.getElementById('user-language').value;
 
             if (!codePayload.trim()) {
-                alert("Please enter broken Python code to remediate.");
+                alert("Please enter broken code to remediate.");
                 return;
             }
 
@@ -173,7 +174,11 @@ HTML_TEMPLATE = """
             fetch('/api/remediate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: codePayload, error_log: logPayload })
+                body: JSON.stringify({ 
+                    code: codePayload, 
+                    error_log: logPayload,
+                    language: languagePayload
+                })
             })
             .then(res => res.json())
             .then(data => {
@@ -206,15 +211,6 @@ HTML_TEMPLATE = """
                 const btn = document.getElementById('btn-copy-code');
                 btn.innerText = "Copied!";
                 setTimeout(() => { btn.innerText = "Copy Clean Code"; }, 2000);
-            });
-        }
-        
-        function copyDiffString() {
-            if (!lastDiffString && !window.interactiveDiffActive) return;
-            navigator.clipboard.writeText(lastDiffString).then(() => {
-                const btn = document.getElementById('btn-copy-diff');
-                btn.innerText = "Copied!";
-                setTimeout(() => { btn.innerText = "Copy Diff"; }, 2000);
             });
         }
 
@@ -254,16 +250,28 @@ HTML_TEMPLATE = """
         </div>
 
         <div class="section-header">
-            <h2 class="section-title">Interactive Remediation Workbench (Dynamic Ingestion)</h2>
+            <h2 class="section-title">Interactive Remediation Workbench (Multi-Language Ingestion)</h2>
         </div>
         <div class="interactive-box">
             <div class="form-group">
+                <label class="form-label" for="user-language">Target Runtime / Language Profile</label>
+                <select id="user-language" class="lang-select">
+                    <option value="python">Python (.py)</option>
+                    <option value="nodejs">Node.js / JavaScript (.js)</option>
+                    <option value="go">Go (.go)</option>
+                    <option value="java">Java (.java)</option>
+                    <option value="cpp">C++ (.cpp)</option>
+                    <option value="rust">Rust (.rs)</option>
+                    <option value="csharp">C# (.cs)</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label" for="user-code">Broken Code Snippet</label>
-                <textarea id="user-code" class="code-textarea" placeholder="Paste python code with errors here..."></textarea>
+                <textarea id="user-code" class="code-textarea" placeholder="Paste source code with bugs/errors here..."></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label" for="user-log">Exception / Stack Trace Log (Optional)</label>
-                <input type="text" id="user-log" class="log-input" placeholder="e.g., ZeroDivisionError: division by zero" />
+                <input type="text" id="user-log" class="log-input" placeholder="e.g., TypeError: Cannot read properties of undefined" />
             </div>
             <button id="btn-remediate" class="btn-submit" onclick="submitInteractiveRemediation()">Analyze & Remediate Patch</button>
         </div>
@@ -364,17 +372,19 @@ def api_remediate():
     data = request.get_json() or {}
     user_code = data.get('code', '')
     error_log = data.get('error_log', 'User Submitted Interactive Incident')
+    language = data.get('language', 'python')
 
     if not user_code.strip():
         return jsonify({'status': 'error', 'message': 'No code provided'}), 400
 
     payload = {
         "log": {
-            "event_name": "INTERACTIVE_UI_REMEDIATION",
+            "event_name": f"INTERACTIVE_UI_REMEDIATION_{language.upper()}",
             "message": error_log,
             "timestamp": "NOW"
         },
-        "source_code": user_code
+        "source_code": user_code,
+        "language": language
     }
 
     try:
@@ -389,8 +399,8 @@ def api_remediate():
         diff_gen = difflib.unified_diff(
             before_lines,
             after_lines,
-            fromfile='a/user_submission.py',
-            tofile='b/user_submission.py',
+            fromfile=f'a/submission.{language}',
+            tofile=f'b/submission.{language}',
         )
         diff_string = ''.join(diff_gen)
 
