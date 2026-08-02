@@ -256,13 +256,9 @@ HTML_TEMPLATE = """
             <div class="form-group">
                 <label class="form-label" for="user-language">Target Runtime / Language Profile</label>
                 <select id="user-language" class="lang-select">
-                    <option value="python">Python (.py)</option>
-                    <option value="nodejs">Node.js / JavaScript (.js)</option>
-                    <option value="go">Go (.go)</option>
-                    <option value="java">Java (.java)</option>
-                    <option value="cpp">C++ (.cpp)</option>
-                    <option value="rust">Rust (.rs)</option>
-                    <option value="csharp">C# (.cs)</option>
+                    {% for ext, profile in profiles.items() %}
+                        <option value="{{ ext }}">{{ profile.name }} ({{ ext }})</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="form-group">
@@ -325,7 +321,10 @@ HTML_TEMPLATE = """
 @app.route('/')
 def home():
     return render_template_string(
-        HTML_TEMPLATE, target=config.TARGET_FILE, model=config.OPENAI_MODEL
+        HTML_TEMPLATE,
+        target=config.TARGET_FILE,
+        model=config.OPENAI_MODEL,
+        profiles=config.LANGUAGE_PROFILES,
     )
 
 
@@ -372,7 +371,7 @@ def api_remediate():
     data = request.get_json() or {}
     user_code = data.get('code', '')
     error_log = data.get('error_log', 'User Submitted Interactive Incident')
-    language = data.get('language', 'python')
+    language = data.get('language', '.py')
 
     if not user_code.strip():
         return jsonify({'status': 'error', 'message': 'No code provided'}), 400
@@ -399,8 +398,8 @@ def api_remediate():
         diff_gen = difflib.unified_diff(
             before_lines,
             after_lines,
-            fromfile=f'a/submission.{language}',
-            tofile=f'b/submission.{language}',
+            fromfile=f'a/submission{language}',
+            tofile=f'b/submission{language}',
         )
         diff_string = ''.join(diff_gen)
 
