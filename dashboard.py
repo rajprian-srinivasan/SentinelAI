@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import difflib
+import subprocess
 from flask import Flask, jsonify, render_template_string, request
 import config
 
@@ -169,7 +170,7 @@ HTML_TEMPLATE = """
             }
 
             btn.disabled = true;
-            btn.innerText = "Analyzing & Generating Patch...";
+            btn.innerText = "Analyzing & Validating Sandbox Patch...";
 
             fetch('/api/remediate', {
                 method: 'POST',
@@ -195,7 +196,7 @@ HTML_TEMPLATE = """
 
                     renderDiff(data.diff);
                 } else {
-                    alert("Patching Error: " + (data.message || "Unable to generate patch."));
+                    alert("Sandbox Validation Error: " + (data.message || "Unable to generate patch."));
                 }
             })
             .catch(err => {
@@ -392,6 +393,33 @@ def api_remediate():
         if not patched_code or patched_code.startswith("AI Analysis failed"):
             return jsonify({'status': 'error', 'message': patched_code or 'Failed to generate patch.'}), 500
 
+        # --- PRE-FLIGHT SANDBOX VERIFICATION STEP ---
+        temp_test_file = f"temp_ui_sandbox{language}"
+        try:
+            with open(temp_test_file, "w") as f:
+                f.write(patched_code)
+
+            profile = config.LANGUAGE_PROFILES.get(language, config.LANGUAGE_PROFILES[".py"])
+            validate_cmd = [cmd if cmd != config.TEMP_FILE else temp_test_file for cmd in profile["validate"]]
+
+            syntax_check = subprocess.run(
+                validate_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+
+            if syntax_check.returncode != 0:
+                return jsonify({
+                    'status': 'error',
+                    'message': f"Patch generated, but failed pre-flight sandbox compilation check:\n{syntax_check.stderr}"
+                }), 422
+        finally:
+            if os.path.exists(temp_test_file):
+                os.remove(temp_test_file)
+        # -------------------------------------------
+
         before_lines = user_code.splitlines(keepends=True)
         after_lines = patched_code.splitlines(keepends=True)
 
@@ -406,7 +434,8 @@ def api_remediate():
         return jsonify({
             'status': 'success',
             'patched_code': patched_code,
-            'diff': diff_string
+            'diff': diff_string,
+            'sandbox_verified': True
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
