@@ -1,4 +1,4 @@
-````markdown
+
 # SentinelAI: Autonomous Self-Healing Site Reliability Engineering (SRE) Agent
 
 SentinelAI is an autonomous, closed-loop Site Reliability Engineering (SRE) orchestration engine designed to continuously monitor applications, detect catastrophic runtime failures, generate AI-powered code remediations, validate patches inside an isolated sandbox, and safely deploy verified fixes through transactional, atomic updates.
